@@ -208,14 +208,35 @@ const Builder = () => {
   };
 
   const handleAddSkill = () => {
-    if (!newSkill.trim()) return;
+    const parsedSkills = newSkill
+      .split(",")
+      .map((skill) => skill.trim())
+      .filter(Boolean);
+
+    if (parsedSkills.length === 0) return;
+
     if (skills.length >= VALIDATION_RULES.SKILLS.MAX_COUNT) {
       toast({ title: `Max ${VALIDATION_RULES.SKILLS.MAX_COUNT} skills`, variant: "destructive" });
       return;
     }
-    addSkill.mutate({ skill_name: newSkill, skill_category: "Custom", skill_type: "learned" }, {
-      onSuccess: () => { setNewSkill(""); toast({ title: "Skill added!" }); },
-    });
+
+    const availableSlots = VALIDATION_RULES.SKILLS.MAX_COUNT - skills.length;
+    const nextSkills = parsedSkills.slice(0, availableSlots);
+
+    Promise.all(
+      nextSkills.map((skillName) =>
+        addSkill.mutateAsync({ skill_name: skillName, skill_category: "Custom", skill_type: "learned" })
+      )
+    )
+      .then(() => {
+        setNewSkill("");
+        toast({
+          title: nextSkills.length === 1 ? "Skill added!" : `${nextSkills.length} skills added!`,
+        });
+      })
+      .catch((error: any) => {
+        toast({ title: "Error adding skills", description: error.message, variant: "destructive" });
+      });
   };
 
   const handleAddProject = () => {
@@ -688,19 +709,22 @@ const Builder = () => {
                   </div>
 
                   {skills.length < VALIDATION_RULES.SKILLS.MAX_COUNT && (
-                      <div className="rounded-xl border-2 border-dashed border-border bg-muted/30 p-5 space-y-3">
-                        <h3 className="text-sm font-semibold flex items-center gap-2">
-                          <Plus className="h-4 w-4" /> Add Skill
+                    <div className="rounded-xl border-2 border-dashed border-border bg-muted/30 p-5 space-y-3">
+                      <h3 className="text-sm font-semibold flex items-center gap-2">
+                        <Plus className="h-4 w-4" /> Add Skill
                         <span className="ml-auto text-xs font-normal text-muted-foreground">{skills.length}/{VALIDATION_RULES.SKILLS.MAX_COUNT}</span>
-                        </h3>
-                        <div className="flex gap-2">
-                          <Input placeholder="e.g. React, TypeScript, Figma" value={newSkill} onChange={(e) => setNewSkill(e.target.value)} className="flex-1" maxLength={50} onKeyDown={(e) => e.key === "Enter" && handleAddSkill()} />
-                          <Button onClick={handleAddSkill} size="sm" disabled={addSkill.isPending} variant="hero">
-                            <Plus className="mr-1 h-4 w-4" /> Add
-                          </Button>
-                        </div>
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        Type one skill or a comma-separated list like `React, TypeScript, Figma`.
+                      </p>
+                      <div className="flex gap-2">
+                        <Input placeholder="e.g. React, TypeScript, Figma" value={newSkill} onChange={(e) => setNewSkill(e.target.value)} className="flex-1" maxLength={120} onKeyDown={(e) => e.key === "Enter" && handleAddSkill()} />
+                        <Button onClick={handleAddSkill} size="sm" disabled={addSkill.isPending} variant="hero">
+                          <Plus className="mr-1 h-4 w-4" /> Add
+                        </Button>
                       </div>
-                    )}
+                    </div>
+                  )}
                   </div>
                 )}
 

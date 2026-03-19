@@ -421,7 +421,7 @@ const Dashboard = () => {
                   {missingSections.map((s) => (
                     <Link
                       key={s.id}
-                      to={`/builder?section=${s.id}`}
+                      to={`${builderHref}${builderHref.includes("?") ? "&" : "?"}section=${s.id}`}
                       className="inline-flex items-center rounded-md border border-primary/30 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
                     >
                       {SECTION_LABELS[s.id]}
@@ -487,6 +487,7 @@ const Dashboard = () => {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <h3 className="font-semibold text-sm truncate">{p.name || "Untitled"}</h3>
+                          {p.id === portfolioId && <Badge className="text-[10px] px-1.5 py-0">Selected</Badge>}
                           {p.is_default && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Default</Badge>}
                         </div>
                         <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
@@ -505,7 +506,12 @@ const Dashboard = () => {
                       </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 ml-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 shrink-0 ml-1"
+                            onClick={(event) => event.stopPropagation()}
+                          >
                             <MoreVertical className="h-3.5 w-3.5" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -536,8 +542,19 @@ const Dashboard = () => {
                       </DropdownMenu>
                     </div>
 
-                    <div className="mt-3 flex gap-2">
-                      <Button variant="ghost" size="sm" className="h-7 text-xs flex-1" onClick={() => navigate(`/preview?portfolio=${p.id}`)}>
+                    <div className="mt-4 flex items-center justify-between gap-3">
+                      <p className="text-[11px] text-muted-foreground">
+                        {p.id === portfolioId ? "Active portfolio" : "Click card to select"}
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          navigate(`/preview?portfolio=${p.id}`);
+                        }}
+                      >
                         <Eye className="mr-1 h-3 w-3" /> Preview
                       </Button>
                     </div>
@@ -550,9 +567,11 @@ const Dashboard = () => {
             <div>
               <h2 className="mb-4 font-semibold">Quick Actions</h2>
               {selectedPortfolio && (
-                <p className="mb-3 text-xs text-muted-foreground">
-                  Selected portfolio: <span className="font-medium text-foreground">{selectedPortfolio.name || "Untitled"}</span>
-                </p>
+                <div className="mb-3 rounded-xl border border-border bg-card p-3">
+                  <p className="text-xs text-muted-foreground">Selected portfolio</p>
+                  <p className="mt-1 text-sm font-medium text-foreground">{selectedPortfolio.name || "Untitled"}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Quick actions below will apply only to this portfolio.</p>
+                </div>
               )}
               <div className="space-y-2">
                 {quickActions.map((action) => (
@@ -561,7 +580,7 @@ const Dashboard = () => {
                     type="button"
                     onClick={action.onClick}
                     disabled={action.disabled}
-                    className={`flex items-center gap-3 rounded-xl border border-border bg-card p-3.5 shadow-card transition-all duration-200 ${action.hoverBorder} hover:shadow-sm`}
+                    className={`flex w-full items-center gap-3 rounded-xl border border-border bg-card p-3.5 text-left shadow-card transition-all duration-200 ${action.hoverBorder} hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50`}
                   >
                     <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${action.color}`}>
                       <action.icon className="h-4 w-4" />
@@ -588,15 +607,15 @@ const Dashboard = () => {
                   <h3 className="font-semibold">Share Your Portfolio</h3>
                   <p className="text-sm text-muted-foreground">
                     {profile?.username
-                      ? `Your portfolio URL: /p/${profile.username}`
+                      ? `${selectedPortfolio?.name || "Selected portfolio"} will be shared at /p/${profile.username}`
                       : "Set a username in settings to get a public URL"}
                   </p>
                 </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="hero"
-                    size="sm"
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="hero"
+                  size="sm"
                   disabled={!profile?.username || !portfolio?.is_public}
                   onClick={() => setIsShareOpen(true)}
                 >
