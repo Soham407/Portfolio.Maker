@@ -424,7 +424,7 @@ export default function BrutalistTemplate({ bio, projects, skills, experiences, 
       <footer className="px-8 py-6 text-xs uppercase tracking-widest" style={{ borderTop: "1px solid #222", color: "#333" }}>
         <div className="mx-auto max-w-6xl flex items-center justify-between">
           <span>BUILT WITH PORTFOLIOBUILDER</span>
-          <a href="/" className="hover:text-white transition-colors">portfoliobuilder.io</a>
+          <a href="/" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">portfoliobuilder.io</a>
         </div>
       </footer>
     </div>

@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Check, ArrowLeft, Briefcase } from "lucide-react";
@@ -236,7 +236,9 @@ const TEMPLATE_ANIMATION_LABELS: Record<string, string> = {
 };
 
 const TemplateSelection = () => {
-  const { portfolio, updatePortfolio } = usePortfolio();
+  const [searchParams] = useSearchParams();
+  const portfolioParam = searchParams.get("portfolio") ?? undefined;
+  const { portfolio, updatePortfolio } = usePortfolio(portfolioParam);
   const { toast } = useToast();
 
   const handleSelect = (templateId: string) => {

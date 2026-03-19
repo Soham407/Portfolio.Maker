@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
-import { GraduationCap, Search, Award, Laptop, Briefcase, ArrowRight } from "lucide-react";
+import { GraduationCap, Search, ArrowRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -10,9 +10,6 @@ import { useToast } from "@/hooks/use-toast";
 const USER_TYPES = [
   { value: "fresher", label: "Fresher", description: "Recent graduate or new to the field", icon: GraduationCap },
   { value: "job_seeker", label: "Job Seeker", description: "Actively looking for employment", icon: Search },
-  { value: "expert", label: "Expert", description: "Experienced professional with deep expertise", icon: Award },
-  { value: "freelancer", label: "Freelancer", description: "Independent contractor or consultant", icon: Laptop },
-  { value: "professional", label: "Professional", description: "Established career with certifications", icon: Briefcase },
 ];
 
 const UserTypeSelection = () => {

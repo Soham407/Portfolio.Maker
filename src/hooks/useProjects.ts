@@ -16,7 +16,10 @@ export const useProjects = (portfolioId: string | undefined) => {
         .eq("portfolio_id", portfolioId!)
         .order("display_order");
       if (error) throw error;
-      return data;
+      return (data || []).map((project) => ({
+        ...project,
+        solution: project.solution_approach,
+      }));
     },
     enabled: !!portfolioId,
   });

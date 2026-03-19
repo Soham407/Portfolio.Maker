@@ -421,7 +421,7 @@ export default function EditorialTemplate({ bio, projects, skills, experiences, 
       </section>
 
       <footer className="py-8 text-center text-sm" style={{ borderTop: "1px solid #e5e5e5", color: "#aaa" }}>
-        Built with <a href="/" className="font-medium hover:underline" style={{ color: GREEN }}>PortfolioBuilder</a>
+        Built with <a href="/" target="_blank" rel="noopener noreferrer" className="font-medium hover:underline" style={{ color: GREEN }}>PortfolioBuilder</a>
       </footer>
     </div>
   );

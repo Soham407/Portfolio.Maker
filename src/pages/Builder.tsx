@@ -16,6 +16,7 @@ import LinkedInImport from "@/components/LinkedInImport";
 import AvatarUpload from "@/components/builder/AvatarUpload";
 import AIPolishButton from "@/components/builder/AIPolishButton";
 import { useQuery } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { useBio } from "@/hooks/useBio";
@@ -26,7 +27,7 @@ import { useEducation } from "@/hooks/useEducation";
 import { useContact } from "@/hooks/useContact";
 import { useCertifications } from "@/hooks/useCertifications";
 import { useToast } from "@/hooks/use-toast";
-import { SKILL_CATEGORIES, SKILL_TYPES, VALIDATION_RULES, EMPLOYMENT_TYPES, PORTFOLIO_TYPES } from "@/lib/constants";
+import { VALIDATION_RULES, EMPLOYMENT_TYPES, PORTFOLIO_TYPES } from "@/lib/constants";
 import { supabase } from "@/integrations/supabase/client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -46,9 +47,12 @@ const sections: { id: Section; label: string; icon: React.ElementType; descripti
 const Builder = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
-  const { portfolio, isLoading: portfolioLoading, createPortfolio, updatePortfolio } = usePortfolio();
+  const requestedPortfolioId = searchParams.get("portfolio") ?? undefined;
+  const { portfolio, isLoading: portfolioLoading, createPortfolio, updatePortfolio } = usePortfolio(requestedPortfolioId);
   const portfolioId = portfolio?.id;
+  const previewHref = portfolioId ? `/preview?portfolio=${portfolioId}` : "/preview";
 
   const { bio, saveBio } = useBio(portfolioId);
   const { projects, addProject, updateProject, deleteProject } = useProjects(portfolioId);
@@ -74,8 +78,6 @@ const Builder = () => {
   const [bioForm, setBioForm] = useState({ first_name: "", last_name: "", headline: "", bio: "", location: "" });
   const [contactForm, setContactForm] = useState({ email: "", phone: "", linkedin_url: "", github_url: "", twitter_url: "", website_url: "" });
   const [newSkill, setNewSkill] = useState("");
-  const [newSkillCategory, setNewSkillCategory] = useState("Languages");
-  const [newSkillType, setNewSkillType] = useState("learned");
   const [projectForm, setProjectForm] = useState({ name: "", problem_statement: "", solution_approach: "", technologies: "", github_url: "", project_url: "" });
   const [githubUsername, setGithubUsername] = useState("");
   const [githubRepos, setGithubRepos] = useState<any[]>([]);
@@ -112,10 +114,10 @@ const Builder = () => {
   }, [contact]);
 
   useEffect(() => {
-    if (!portfolioLoading && !portfolio && user) {
+    if (!portfolioLoading && !portfolio && user && !requestedPortfolioId) {
       createPortfolio.mutate({});
     }
-  }, [portfolioLoading, portfolio, user]);
+  }, [portfolioLoading, portfolio, user, requestedPortfolioId]);
 
   // Initialize settings form from profile
   const { data: profileData } = useQuery({
@@ -136,7 +138,7 @@ const Builder = () => {
       setPortfolioNameValue(portfolio.name || "");
       setPortfolioTypeValue(portfolio.portfolio_type || "general");
     }
-  }, [portfolio?.id]);
+  }, [portfolio?.id, portfolio?.name, portfolio?.portfolio_type]);
 
   const checkUsername = useCallback(async (value: string) => {
     if (!value) { setUsernameStatus("idle"); return; }
@@ -166,8 +168,16 @@ const Builder = () => {
       toast({ title: "Fix username errors first", variant: "destructive" }); return;
     }
     try {
-      await supabase.from("profiles").update({ username: usernameValue || null }).eq("id", user!.id);
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({ username: usernameValue || null })
+        .eq("id", user!.id);
+      if (profileError) throw profileError;
+
       await updatePortfolio.mutateAsync({ name: portfolioNameValue, portfolio_type: portfolioTypeValue });
+      await queryClient.invalidateQueries({ queryKey: ["profile", user?.id] });
+      await queryClient.invalidateQueries({ queryKey: ["portfolio"] });
+      await queryClient.invalidateQueries({ queryKey: ["portfolios-all"] });
       toast({ title: "Settings saved!" });
     } catch (e: any) {
       toast({ title: "Error saving settings", description: e.message, variant: "destructive" });
@@ -203,7 +213,7 @@ const Builder = () => {
       toast({ title: `Max ${VALIDATION_RULES.SKILLS.MAX_COUNT} skills`, variant: "destructive" });
       return;
     }
-    addSkill.mutate({ skill_name: newSkill, skill_category: newSkillCategory, skill_type: newSkillType }, {
+    addSkill.mutate({ skill_name: newSkill, skill_category: "Custom", skill_type: "learned" }, {
       onSuccess: () => { setNewSkill(""); toast({ title: "Skill added!" }); },
     });
   };
@@ -335,6 +345,7 @@ const Builder = () => {
   };
 
   const sectionFilled = (id: Section): boolean => {
+    if (id === "settings") return false;
     if (id === "bio") return !!(bioForm.first_name || bio?.first_name);
     if (id === "contact") return !!(contactForm.email || contact?.email);
     const count = getSectionCount(id);
@@ -352,8 +363,9 @@ const Builder = () => {
     );
   }
 
-  const filledCount = sections.filter((s) => sectionFilled(s.id)).length;
-  const progressPct = Math.round((filledCount / sections.length) * 100);
+  const progressSections = sections.filter((section) => section.id !== "settings");
+  const filledCount = progressSections.filter((s) => sectionFilled(s.id)).length;
+  const progressPct = Math.round((filledCount / progressSections.length) * 100);
   const ActiveIcon = sections.find((s) => s.id === activeSection)?.icon || User;
   const activeLabel = sections.find((s) => s.id === activeSection)?.label || "";
 
@@ -375,7 +387,7 @@ const Builder = () => {
           {/* Progress bar — center */}
           <div className="mx-auto hidden max-w-xs flex-1 flex-col gap-1 sm:flex">
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{filledCount}/{sections.length} sections filled</span>
+              <span>{filledCount}/{progressSections.length} sections filled</span>
               <span className="font-medium text-foreground">{progressPct}%</span>
             </div>
             <Progress value={progressPct} className="h-1.5" />
@@ -383,10 +395,10 @@ const Builder = () => {
 
           <div className="ml-auto flex items-center gap-2">
             <Button variant="outline" size="sm" className="hidden sm:flex" asChild>
-              <Link to="/preview"><Eye className="mr-1.5 h-3.5 w-3.5" /> Preview</Link>
+              <Link to={previewHref}><Eye className="mr-1.5 h-3.5 w-3.5" /> Preview</Link>
             </Button>
             <Button variant="hero" size="sm" asChild>
-              <Link to="/preview"><Eye className="h-4 w-4 sm:hidden" /></Link>
+              <Link to={previewHref}><Eye className="h-4 w-4 sm:hidden" /></Link>
             </Button>
           </div>
         </div>
@@ -655,66 +667,42 @@ const Builder = () => {
               {/* SKILLS */}
               {activeSection === "skills" && (
                 <div className="space-y-6">
-                  {SKILL_TYPES.map((type) => {
-                    const typeSkills = skills.filter((s) => (s.skill_type || "learned") === type.value);
-                    return (
-                      <div key={type.value}>
-                        <div className="mb-2">
-                          <h3 className="text-sm font-semibold">{type.label}</h3>
-                          <p className="text-xs text-muted-foreground">{type.description}</p>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {typeSkills.map((skill) => (
-                            <Badge key={skill.id} variant={type.value === "implemented" ? "default" : "secondary"} className="gap-1 pr-1">
-                              {skill.skill_name}
-                              <span className="text-[10px] opacity-60">· {skill.skill_category}</span>
-                              <button onClick={() => deleteSkill.mutate(skill.id)} className="ml-1 rounded-full p-0.5 hover:bg-destructive/20">
-                                <X className="h-3 w-3" />
-                              </button>
-                            </Badge>
-                          ))}
-                          {typeSkills.length === 0 && (
-                            <p className="text-xs text-muted-foreground italic">No {type.label.toLowerCase()} skills yet</p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                  <div>
+                    <div className="mb-2">
+                      <h3 className="text-sm font-semibold">Skills</h3>
+                      <p className="text-xs text-muted-foreground">Add skills as free text.</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {skills.map((skill) => (
+                        <Badge key={skill.id} variant="secondary" className="gap-1 pr-1">
+                          {skill.skill_name}
+                          <button onClick={() => deleteSkill.mutate(skill.id)} className="ml-1 rounded-full p-0.5 hover:bg-destructive/20">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                      {skills.length === 0 && (
+                        <p className="text-xs text-muted-foreground italic">No skills added yet</p>
+                      )}
+                    </div>
+                  </div>
 
                   {skills.length < VALIDATION_RULES.SKILLS.MAX_COUNT && (
-                    <div className="rounded-xl border-2 border-dashed border-border bg-muted/30 p-5 space-y-3">
-                      <h3 className="text-sm font-semibold flex items-center gap-2">
-                        <Plus className="h-4 w-4" /> Add Skill
+                      <div className="rounded-xl border-2 border-dashed border-border bg-muted/30 p-5 space-y-3">
+                        <h3 className="text-sm font-semibold flex items-center gap-2">
+                          <Plus className="h-4 w-4" /> Add Skill
                         <span className="ml-auto text-xs font-normal text-muted-foreground">{skills.length}/{VALIDATION_RULES.SKILLS.MAX_COUNT}</span>
-                      </h3>
-                      <div className="flex gap-2">
-                        <Input placeholder="Skill name" value={newSkill} onChange={(e) => setNewSkill(e.target.value)} className="flex-1" maxLength={50} onKeyDown={(e) => e.key === "Enter" && handleAddSkill()} />
-                        <Select value={newSkillCategory} onValueChange={setNewSkillCategory}>
-                          <SelectTrigger className="w-[130px]"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {SKILL_CATEGORIES.map((cat) => (
-                              <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        </h3>
+                        <div className="flex gap-2">
+                          <Input placeholder="e.g. React, TypeScript, Figma" value={newSkill} onChange={(e) => setNewSkill(e.target.value)} className="flex-1" maxLength={50} onKeyDown={(e) => e.key === "Enter" && handleAddSkill()} />
+                          <Button onClick={handleAddSkill} size="sm" disabled={addSkill.isPending} variant="hero">
+                            <Plus className="mr-1 h-4 w-4" /> Add
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex gap-2">
-                        <Select value={newSkillType} onValueChange={setNewSkillType}>
-                          <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {SKILL_TYPES.map((t) => (
-                              <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Button onClick={handleAddSkill} size="sm" disabled={addSkill.isPending} variant="hero">
-                          <Plus className="mr-1 h-4 w-4" /> Add
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+                    )}
+                  </div>
+                )}
 
               {/* EXPERIENCE */}
               {activeSection === "experience" && (

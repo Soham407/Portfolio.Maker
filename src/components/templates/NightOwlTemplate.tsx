@@ -375,7 +375,7 @@ export default function NightOwlTemplate({ bio, projects, skills, experiences, e
       </div>
 
       <footer className="border-t py-8 text-center font-mono text-xs" style={{ borderColor: BORDER, color: "#8b949e" }}>
-        Built with <a href="/" className="hover:underline" style={{ color: TEAL }}>PortfolioBuilder</a>
+        Built with <a href="/" target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: TEAL }}>PortfolioBuilder</a>
       </footer>
     </div>
   );

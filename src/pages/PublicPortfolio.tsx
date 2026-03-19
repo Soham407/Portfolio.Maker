@@ -39,8 +39,14 @@ const PublicPortfolio = () => {
         profile,
         portfolio,
         bio: bioRes.data,
-        projects: projectsRes.data || [],
-        skills: skillsRes.data || [],
+        projects: (projectsRes.data || []).map((project) => ({
+          ...project,
+          solution: project.solution_approach,
+        })),
+        skills: (skillsRes.data || []).map((skill) => ({
+          ...skill,
+          category: skill.skill_category,
+        })),
         experiences: expRes.data || [],
         education: eduRes.data || [],
         contact: contactRes.data,

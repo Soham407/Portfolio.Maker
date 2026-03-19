@@ -92,9 +92,14 @@ const CareerSetup = () => {
           </div>
         </div>
 
-        <Button variant="hero" className="mt-8 w-full" disabled={!careerType || !skillLevel || isLoading} onClick={handleContinue}>
-          Continue <ArrowRight className="ml-2 h-4 w-4" />
-        </Button>
+        <div className="mt-8 flex items-center justify-between gap-4">
+          <Button variant="ghost" onClick={() => navigate("/user-type-selection")}>
+            Back
+          </Button>
+          <Button variant="hero" disabled={!careerType || !skillLevel || isLoading} onClick={handleContinue}>
+            Continue <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+        </div>
       </motion.div>
     </div>
   );

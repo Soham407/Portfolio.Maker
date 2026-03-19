@@ -29,16 +29,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PORTFOLIO_TYPES } from "@/lib/constants";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-
-const quickActions = [
-  { icon: PenTool, label: "Edit Portfolio", description: "Continue building", href: "/builder", color: "text-primary bg-primary/10", hoverBorder: "hover:border-primary/30" },
-  { icon: Eye, label: "Preview", description: "See how it looks", href: "/preview", color: "text-emerald-600 bg-emerald-500/10", hoverBorder: "hover:border-emerald-200" },
-  { icon: Layout, label: "Templates", description: "Change template", href: "/templates", color: "text-violet-600 bg-violet-500/10", hoverBorder: "hover:border-violet-200" },
-  { icon: BarChart3, label: "Analytics", description: "View insights", href: "/dashboard#analytics", color: "text-orange-600 bg-orange-500/10", hoverBorder: "hover:border-orange-200" },
-];
 
 const portfolioTypeColors: Record<string, string> = {
   general: "bg-blue-500/10 text-blue-700 border-blue-200/50",
@@ -61,7 +54,8 @@ const Dashboard = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { portfolio, allPortfolios, createPortfolio, duplicatePortfolio, setDefaultPortfolio, deletePortfolio, updatePortfolio } = usePortfolio();
+  const [selectedPortfolioId, setSelectedPortfolioId] = useState<string | undefined>(undefined);
+  const { portfolio, allPortfolios, createPortfolio, duplicatePortfolio, setDefaultPortfolio, deletePortfolio, updatePortfolio } = usePortfolio(selectedPortfolioId);
   const portfolioId = portfolio?.id;
   const { bio } = useBio(portfolioId);
   const { projects } = useProjects(portfolioId);
@@ -73,6 +67,7 @@ const Dashboard = () => {
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
+  const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [newName, setNewName] = useState("New Portfolio");
   const [newType, setNewType] = useState("general");
   const [copied, setCopied] = useState(false);
@@ -169,6 +164,18 @@ const Dashboard = () => {
     enabled: !!portfolioId,
   });
 
+  const selectedPortfolio = allPortfolios.find((item) => item.id === portfolioId) ?? portfolio;
+  const builderHref = portfolioId ? `/builder?portfolio=${portfolioId}` : "/builder";
+  const previewHref = portfolioId ? `/preview?portfolio=${portfolioId}` : "/preview";
+  const templatesHref = portfolioId ? `/templates?portfolio=${portfolioId}` : "/templates";
+
+  useEffect(() => {
+    if (!selectedPortfolioId || allPortfolios.some((item) => item.id === selectedPortfolioId)) {
+      return;
+    }
+    setSelectedPortfolioId(undefined);
+  }, [allPortfolios, selectedPortfolioId]);
+
   const handleSignOut = async () => {
     await signOut();
     navigate("/");
@@ -178,8 +185,9 @@ const Dashboard = () => {
     createPortfolio.mutate(
       { name: newName, portfolio_type: newType, user_type: profile?.user_type || "fresher" },
       {
-        onSuccess: () => {
+        onSuccess: (created) => {
           toast({ title: "Portfolio created!" });
+          setSelectedPortfolioId(created.id);
           setIsCreateOpen(false);
           setNewName("New Portfolio");
           setNewType("general");
@@ -191,7 +199,10 @@ const Dashboard = () => {
 
   const handleDuplicate = (id: string) => {
     duplicatePortfolio.mutate(id, {
-      onSuccess: () => toast({ title: "Portfolio duplicated!" }),
+      onSuccess: (duplicated) => {
+        setSelectedPortfolioId(duplicated.id);
+        toast({ title: "Portfolio duplicated!" });
+      },
       onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" }),
     });
   };
@@ -294,6 +305,12 @@ const Dashboard = () => {
     return `${Math.floor(hrs / 24)}d ago`;
   };
 
+  const quickActions = [
+    { icon: PenTool, label: "Edit Portfolio", description: "Continue building", onClick: () => navigate(builderHref), color: "text-primary bg-primary/10", hoverBorder: "hover:border-primary/30", disabled: !portfolioId },
+    { icon: Layout, label: "Templates", description: "Change template", onClick: () => navigate(templatesHref), color: "text-violet-600 bg-violet-500/10", hoverBorder: "hover:border-violet-200", disabled: !portfolioId },
+    { icon: BarChart3, label: "Analytics", description: "View insights", onClick: () => setIsAnalyticsOpen(true), color: "text-orange-600 bg-orange-500/10", hoverBorder: "hover:border-orange-200", disabled: !portfolioId },
+  ];
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -308,7 +325,7 @@ const Dashboard = () => {
 
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="icon" asChild className="text-muted-foreground hover:text-foreground">
-              <Link to="/builder"><Settings className="h-4 w-4" /></Link>
+              <Link to={`${builderHref}${builderHref.includes("?") ? "&" : "?"}section=settings`}><Settings className="h-4 w-4" /></Link>
             </Button>
 
             {/* Avatar dropdown */}
@@ -325,7 +342,7 @@ const Dashboard = () => {
                 </div>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link to="/builder"><Settings className="mr-2 h-4 w-4" /> Settings</Link>
+                  <Link to={`${builderHref}${builderHref.includes("?") ? "&" : "?"}section=settings`}><Settings className="mr-2 h-4 w-4" /> Settings</Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive">
@@ -450,16 +467,19 @@ const Dashboard = () => {
                 <h2 className="font-semibold">Your Portfolios</h2>
                 <Badge variant="secondary" className="text-xs">{allPortfolios.length} total</Badge>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {allPortfolios.map((p) => (
-                  <div
-                    key={p.id}
-                    className={`relative rounded-xl border bg-card p-4 shadow-card transition-all ${
-                      p.is_default
-                        ? "border-primary/40 ring-1 ring-primary/10"
-                        : "border-border hover:border-primary/20"
-                    }`}
-                  >
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {allPortfolios.map((p) => (
+                    <div
+                      key={p.id}
+                      onClick={() => setSelectedPortfolioId(p.id)}
+                      className={`relative rounded-xl border bg-card p-4 shadow-card transition-all ${
+                        p.id === portfolioId
+                          ? "border-primary/40 ring-2 ring-primary/20"
+                          : p.is_default
+                            ? "border-primary/40 ring-1 ring-primary/10"
+                            : "border-border hover:border-primary/20"
+                      } cursor-pointer`}
+                    >
                     {/* Color bar at top */}
                     <div className={`absolute left-0 right-0 top-0 h-1 rounded-t-xl bg-gradient-primary ${p.is_default ? "opacity-100" : "opacity-30"}`} />
 
@@ -490,12 +510,6 @@ const Dashboard = () => {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => navigate(`/builder?portfolio=${p.id}`)}>
-                            <PenTool className="mr-2 h-3.5 w-3.5" /> Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => navigate(`/preview?portfolio=${p.id}`)}>
-                            <Eye className="mr-2 h-3.5 w-3.5" /> Preview
-                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleDuplicate(p.id)}>
                             <Copy className="mr-2 h-3.5 w-3.5" /> Duplicate
                           </DropdownMenuItem>
@@ -523,9 +537,6 @@ const Dashboard = () => {
                     </div>
 
                     <div className="mt-3 flex gap-2">
-                      <Button variant="outline" size="sm" className="h-7 text-xs flex-1" onClick={() => navigate(`/builder?portfolio=${p.id}`)}>
-                        <PenTool className="mr-1 h-3 w-3" /> Edit
-                      </Button>
                       <Button variant="ghost" size="sm" className="h-7 text-xs flex-1" onClick={() => navigate(`/preview?portfolio=${p.id}`)}>
                         <Eye className="mr-1 h-3 w-3" /> Preview
                       </Button>
@@ -538,11 +549,18 @@ const Dashboard = () => {
             {/* Quick Actions — 1 col */}
             <div>
               <h2 className="mb-4 font-semibold">Quick Actions</h2>
+              {selectedPortfolio && (
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Selected portfolio: <span className="font-medium text-foreground">{selectedPortfolio.name || "Untitled"}</span>
+                </p>
+              )}
               <div className="space-y-2">
                 {quickActions.map((action) => (
-                  <Link
+                  <button
                     key={action.label}
-                    to={action.href}
+                    type="button"
+                    onClick={action.onClick}
+                    disabled={action.disabled}
                     className={`flex items-center gap-3 rounded-xl border border-border bg-card p-3.5 shadow-card transition-all duration-200 ${action.hoverBorder} hover:shadow-sm`}
                   >
                     <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${action.color}`}>
@@ -553,7 +571,7 @@ const Dashboard = () => {
                       <p className="text-xs text-muted-foreground">{action.description}</p>
                     </div>
                     <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
-                  </Link>
+                  </button>
                 ))}
               </div>
             </div>
@@ -574,73 +592,17 @@ const Dashboard = () => {
                       : "Set a username in settings to get a public URL"}
                   </p>
                 </div>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" asChild>
-                  <Link to="/builder?section=settings"><Settings className="mr-1.5 h-3.5 w-3.5" /> Settings</Link>
-                </Button>
-                <Button
-                  variant="hero"
-                  size="sm"
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="hero"
+                    size="sm"
                   disabled={!profile?.username || !portfolio?.is_public}
                   onClick={() => setIsShareOpen(true)}
                 >
                   Share Portfolio
                 </Button>
               </div>
-            </div>
-          </div>
-
-          {/* Analytics Section */}
-          <div id="analytics" className="mt-8">
-            <h2 className="mb-4 font-semibold">Analytics</h2>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-6">
-              <div className="rounded-xl border border-border bg-card p-5 shadow-card">
-                <p className="text-sm text-muted-foreground">Total Views</p>
-                <p className="mt-1 text-3xl font-bold">{viewCount ?? 0}</p>
-              </div>
-              <div className="rounded-xl border border-border bg-card p-5 shadow-card">
-                <p className="text-sm text-muted-foreground">Last 7 Days</p>
-                <p className="mt-1 text-3xl font-bold">{weekViewCount ?? 0}</p>
-              </div>
-              <div className="rounded-xl border border-border bg-card p-5 shadow-card sm:col-span-2 lg:col-span-1">
-                <p className="text-sm text-muted-foreground">Recent Visitors</p>
-                <div className="mt-2 space-y-1.5">
-                  {(recentViews || []).length === 0 ? (
-                    <p className="text-xs text-muted-foreground italic">No views yet</p>
-                  ) : (
-                    recentViews!.map((v, i) => (
-                      <div key={i} className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">Visitor</span>
-                        <span className="text-muted-foreground">{relativeTime(v.created_at)}</span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Bar chart */}
-            <div className="rounded-xl border border-border bg-card p-5 shadow-card">
-              <p className="mb-4 text-sm font-medium">Views — Last 7 Days</p>
-              {(dailyViews || []).length > 0 ? (
-                <ResponsiveContainer width="100%" height={180}>
-                  <BarChart data={dailyViews} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                    <XAxis dataKey="date" tick={{ fontSize: 11 }} className="text-muted-foreground" />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                    <Tooltip
-                      contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }}
-                      labelStyle={{ fontWeight: 600 }}
-                    />
-                    <Bar dataKey="views" radius={[4, 4, 0, 0]} className="fill-primary" fill="hsl(var(--primary))" />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex h-[180px] items-center justify-center">
-                  <p className="text-sm text-muted-foreground">No view data yet</p>
-                </div>
-              )}
             </div>
           </div>
 
@@ -663,7 +625,7 @@ const Dashboard = () => {
           {!profile?.username || !portfolio?.is_public ? (
             <div className="py-2">
               <Button variant="hero" asChild className="w-full">
-                <Link to="/builder?section=settings" onClick={() => setIsShareOpen(false)}>
+                <Link to={`${builderHref}${builderHref.includes("?") ? "&" : "?"}section=settings`} onClick={() => setIsShareOpen(false)}>
                   <Settings className="mr-2 h-4 w-4" />
                   {!profile?.username ? "Set Username in Settings" : "Make Portfolio Public in Settings"}
                 </Link>
@@ -717,6 +679,66 @@ const Dashboard = () => {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isAnalyticsOpen} onOpenChange={setIsAnalyticsOpen}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Portfolio Analytics</DialogTitle>
+            <DialogDescription>
+              {selectedPortfolio?.name ? `Insights for ${selectedPortfolio.name}` : "Insights for the selected portfolio"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="rounded-xl border border-border bg-card p-5 shadow-card">
+                <p className="text-sm text-muted-foreground">Total Views</p>
+                <p className="mt-1 text-3xl font-bold">{viewCount ?? 0}</p>
+              </div>
+              <div className="rounded-xl border border-border bg-card p-5 shadow-card">
+                <p className="text-sm text-muted-foreground">Last 7 Days</p>
+                <p className="mt-1 text-3xl font-bold">{weekViewCount ?? 0}</p>
+              </div>
+              <div className="rounded-xl border border-border bg-card p-5 shadow-card">
+                <p className="text-sm text-muted-foreground">Recent Visitors</p>
+                <div className="mt-2 space-y-1.5">
+                  {(recentViews || []).length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic">No views yet</p>
+                  ) : (
+                    recentViews!.map((v, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">Visitor</span>
+                        <span className="text-muted-foreground">{relativeTime(v.created_at)}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border bg-card p-5 shadow-card">
+              <p className="mb-4 text-sm font-medium">Views - Last 7 Days</p>
+              {(dailyViews || []).length > 0 ? (
+                <ResponsiveContainer width="100%" height={180}>
+                  <BarChart data={dailyViews} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11 }} className="text-muted-foreground" />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                    <Tooltip
+                      contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }}
+                      labelStyle={{ fontWeight: 600 }}
+                    />
+                    <Bar dataKey="views" radius={[4, 4, 0, 0]} className="fill-primary" fill="hsl(var(--primary))" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-[180px] items-center justify-center">
+                  <p className="text-sm text-muted-foreground">No view data yet</p>
+                </div>
+              )}
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -12,6 +12,7 @@ export interface ProjectProp {
   name: string;
   problem_statement?: string | null;
   solution?: string | null;
+  solution_approach?: string | null;
   technologies?: string[] | null;
   github_url?: string | null;
   project_url?: string | null;
@@ -21,6 +22,7 @@ export interface SkillProp {
   id: string;
   skill_name: string;
   category?: string | null;
+  skill_category?: string | null;
   skill_type?: string | null;
   skill_level?: string | null;
 }

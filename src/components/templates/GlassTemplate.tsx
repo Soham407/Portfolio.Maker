@@ -475,7 +475,7 @@ export default function GlassTemplate({ bio, projects, skills, experiences, educ
 
       <footer className="border-t border-white/10 py-8 text-center">
         <p className="text-sm text-white/30">
-          Built with <a href="/" className="text-purple-400 hover:underline">PortfolioBuilder</a>
+          Built with <a href="/" target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:underline">PortfolioBuilder</a>
         </p>
       </footer>
     </div>

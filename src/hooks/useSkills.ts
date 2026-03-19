@@ -16,7 +16,10 @@ export const useSkills = (portfolioId: string | undefined) => {
         .eq("portfolio_id", portfolioId!)
         .order("display_order");
       if (error) throw error;
-      return data;
+      return (data || []).map((skill) => ({
+        ...skill,
+        category: skill.skill_category,
+      }));
     },
     enabled: !!portfolioId,
   });

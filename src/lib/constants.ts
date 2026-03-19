@@ -64,9 +64,6 @@ export const EMPLOYMENT_TYPES = [
 export const USER_TYPES = [
   { value: "fresher", label: "Fresher", description: "Recent graduate or new to the field", icon: "GraduationCap" },
   { value: "job_seeker", label: "Job Seeker", description: "Actively looking for employment", icon: "Search" },
-  { value: "expert", label: "Expert", description: "Experienced professional with deep expertise", icon: "Award" },
-  { value: "freelancer", label: "Freelancer", description: "Independent contractor or consultant", icon: "Laptop" },
-  { value: "professional", label: "Professional", description: "Established career with certifications", icon: "Briefcase" },
 ] as const;
 
 export const SKILL_LEVELS = [

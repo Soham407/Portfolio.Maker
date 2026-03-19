@@ -431,7 +431,7 @@ export default function VibrantTemplate({ bio, projects, skills, experiences, ed
       )}
 
       <footer className="py-6 text-center text-xs" style={{ background: "#0a0a0a", color: "#666" }}>
-        Built with <a href="/" className="hover:underline" style={{ color: LIME }}>PortfolioBuilder</a>
+        Built with <a href="/" target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: LIME }}>PortfolioBuilder</a>
       </footer>
     </div>
   );

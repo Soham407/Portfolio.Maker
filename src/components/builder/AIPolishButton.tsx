@@ -29,14 +29,26 @@ const AIPolishButton = ({ content, contentType, onAccept }: AIPolishButtonProps)
       const { data, error } = await supabase.functions.invoke("polish-content", {
         body: { content, content_type: contentType, tone },
       });
-      if (error) throw error;
+      if (error) {
+        const message = error.message?.includes("non-2xx")
+          ? "The AI polish service is unavailable right now. Please try again in a moment."
+          : error.message;
+        throw new Error(message);
+      }
       if (data?.error) {
         toast({ title: "AI error", description: data.error, variant: "destructive" });
         return;
       }
+      if (!data?.polished || typeof data.polished !== "string") {
+        throw new Error("The AI polish service returned an invalid response.");
+      }
       setPolished(data.polished);
     } catch (err: any) {
-      toast({ title: "Polish failed", description: err.message, variant: "destructive" });
+      toast({
+        title: "Polish failed",
+        description: err.message || "We couldn't polish this content right now. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsPolishing(false);
     }
