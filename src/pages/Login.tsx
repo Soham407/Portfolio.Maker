@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Briefcase, Eye, EyeOff, Mail, CheckCircle2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth, getOnboardingRedirect } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
@@ -23,10 +23,13 @@ const Login = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  if (user) {
+  useEffect(() => {
+    if (!user) return;
+
     getOnboardingRedirect(user.id).then((path) => navigate(path, { replace: true }));
-    return null;
-  }
+  }, [user, navigate]);
+
+  if (user) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { getOnboardingRedirect } from "@/contexts/AuthContext";
 
 const AuthCallback = () => {
   const navigate = useNavigate();
@@ -12,18 +13,8 @@ const AuthCallback = () => {
         navigate("/login");
         return;
       }
-      // Check if profile is set up
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("user_type")
-        .eq("id", session.user.id)
-        .single();
-
-      if (!profile?.user_type) {
-        navigate("/user-type-selection");
-      } else {
-        navigate("/dashboard");
-      }
+      const nextPath = await getOnboardingRedirect(session.user.id);
+      navigate(nextPath, { replace: true });
     };
 
     handleCallback();

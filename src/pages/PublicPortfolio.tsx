@@ -22,8 +22,12 @@ const PublicPortfolio = () => {
         .select("*")
         .eq("user_id", profile.id)
         .eq("is_public", true)
-        .single();
+        .order("is_default", { ascending: false })
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
       if (portErr) throw new Error("Portfolio not found or is private");
+      if (!portfolio) throw new Error("Portfolio not found or is private");
 
       const [bioRes, projectsRes, skillsRes, expRes, eduRes, contactRes, certRes] = await Promise.all([
         supabase.from("bio_sections").select("*").eq("portfolio_id", portfolio.id).maybeSingle(),

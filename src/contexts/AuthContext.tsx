@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { useNavigate } from "react-router-dom";
 
 interface AuthContextType {
   user: User | null;
@@ -80,7 +79,8 @@ export const getOnboardingRedirect = async (userId: string): Promise<string> => 
     .eq("id", userId)
     .single();
 
-  if (!profile?.user_type) return "/user-type-selection";
+  // Step 1 is skippable in the UI, so only force it when no onboarding data exists yet.
+  if (!profile?.user_type && !profile?.career_type && !profile?.selected_role) return "/user-type-selection";
   if (!profile?.career_type) return "/career-setup";
   if (!profile?.selected_role) return "/role-selection";
   return "/dashboard";

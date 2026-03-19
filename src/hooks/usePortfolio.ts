@@ -7,6 +7,29 @@ export const usePortfolio = (specificPortfolioId?: string) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
+  const duplicateRows = async (
+    table: string,
+    sourcePortfolioId: string,
+    targetPortfolioId: string,
+    single: boolean = false
+  ) => {
+    const query = supabase.from(table).select("*").eq("portfolio_id", sourcePortfolioId);
+    const { data, error } = single ? await query.maybeSingle() : await query;
+    if (error) throw error;
+    if (!data) return;
+
+    const rows = Array.isArray(data) ? data : [data];
+    if (rows.length === 0) return;
+
+    const sanitizedRows = rows.map((row) => {
+      const { id: _id, portfolio_id: _pid, created_at: _ca, updated_at: _ua, ...rest } = row;
+      return { ...rest, portfolio_id: targetPortfolioId };
+    });
+
+    const { error: insertError } = await supabase.from(table).insert(sanitizedRows);
+    if (insertError) throw insertError;
+  };
+
   // Fetch the specific portfolio or the default one
   const { data: portfolio, isLoading } = useQuery({
     queryKey: ["portfolio", specificPortfolioId || "default", user?.id],
@@ -101,6 +124,7 @@ export const usePortfolio = (specificPortfolioId?: string) => {
           name: `${source.name || "Portfolio"} (Copy)`,
           portfolio_type: source.portfolio_type,
           template_id: source.template_id,
+          section_layouts: source.section_layouts,
           is_public: false,
           is_default: false,
           section_order: source.section_order,
@@ -109,12 +133,13 @@ export const usePortfolio = (specificPortfolioId?: string) => {
         .single();
       if (error) throw error;
 
-      // Copy bio_sections
-      const { data: bio } = await supabase.from("bio_sections").select("*").eq("portfolio_id", sourcePortfolioId).maybeSingle();
-      if (bio) {
-        const { id: _id, portfolio_id: _pid, created_at: _ca, updated_at: _ua, ...bioData } = bio;
-        await supabase.from("bio_sections").insert({ ...bioData, portfolio_id: newPortfolio.id });
-      }
+      await duplicateRows("bio_sections", sourcePortfolioId, newPortfolio.id, true);
+      await duplicateRows("portfolio_projects", sourcePortfolioId, newPortfolio.id);
+      await duplicateRows("skills", sourcePortfolioId, newPortfolio.id);
+      await duplicateRows("experiences", sourcePortfolioId, newPortfolio.id);
+      await duplicateRows("education", sourcePortfolioId, newPortfolio.id);
+      await duplicateRows("contact_info", sourcePortfolioId, newPortfolio.id, true);
+      await duplicateRows("certifications", sourcePortfolioId, newPortfolio.id);
 
       return newPortfolio;
     },
@@ -148,6 +173,16 @@ export const usePortfolio = (specificPortfolioId?: string) => {
       const { id: updateId, ...rest } = updates;
       const targetId = updateId || specificPortfolioId || portfolio?.id;
       if (!targetId) throw new Error("No portfolio to update");
+
+      if (rest.is_public === true) {
+        const { error: unsetError } = await supabase
+          .from("portfolios")
+          .update({ is_public: false })
+          .eq("user_id", user!.id)
+          .neq("id", targetId);
+        if (unsetError) throw unsetError;
+      }
+
       const { data, error } = await supabase
         .from("portfolios")
         .update(rest)
