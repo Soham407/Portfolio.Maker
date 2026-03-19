@@ -415,11 +415,11 @@ const Builder = () => {
           </div>
 
           <div className="ml-auto flex items-center gap-2">
-            <Button variant="outline" size="sm" className="hidden sm:flex" asChild>
-              <Link to={previewHref}><Eye className="mr-1.5 h-3.5 w-3.5" /> Preview</Link>
-            </Button>
-            <Button variant="hero" size="sm" asChild>
-              <Link to={previewHref}><Eye className="h-4 w-4 sm:hidden" /></Link>
+            <Button variant="outline" size="sm" asChild>
+              <Link to={previewHref}>
+                <Eye className="h-3.5 w-3.5 sm:mr-1.5" />
+                <span className="hidden sm:inline">Preview</span>
+              </Link>
             </Button>
           </div>
         </div>

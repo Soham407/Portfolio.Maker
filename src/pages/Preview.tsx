@@ -25,7 +25,7 @@ const TEMPLATE_NAMES: Record<string, string> = {
 const Preview = () => {
   const [searchParams] = useSearchParams();
   const portfolioParam = searchParams.get("portfolio") ?? undefined;
-  const { portfolio, updateSectionLayouts } = usePortfolio(portfolioParam);
+  const { portfolio, isLoading: portfolioLoading, updateSectionLayouts } = usePortfolio(portfolioParam);
   const portfolioId = portfolio?.id;
   const templateId = portfolio?.template_id ?? "minimal";
   const builderHref = portfolioId ? `/builder?portfolio=${portfolioId}` : "/builder";
@@ -57,6 +57,31 @@ const Preview = () => {
       setActiveSidebarSection(null);
     }
   }, [editMode]);
+
+  if (portfolioLoading || (portfolioParam && !portfolio)) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur">
+          <div className="container flex h-12 items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" asChild>
+                <Link to={builderHref}>
+                  <ArrowLeft className="mr-2 h-3.5 w-3.5" /> Back to Builder
+                </Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex min-h-[calc(100vh-3rem)] items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+            <p className="text-sm text-muted-foreground">Loading your portfolio preview...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
