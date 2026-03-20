@@ -42,9 +42,9 @@ const LinkedInImport = ({
   const [importContact, setImportContact] = useState(true);
   const [fileName, setFileName] = useState("");
 
-  const getErrorMessage = (error: unknown) => {
+  const getErrorMessage = (error: unknown, fallback: string) => {
     if (error instanceof Error) return error.message;
-    return "Something went wrong while parsing this PDF.";
+    return fallback;
   };
 
   const handleFileSelect = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -82,7 +82,7 @@ const LinkedInImport = ({
         description: `${profile.experiences.length} experiences, ${profile.skills.length} skills, ${profile.education.length} education entries, ${profile.certifications.length} certifications`,
       });
     } catch (error: unknown) {
-      toast({ title: "Error parsing PDF", description: getErrorMessage(error), variant: "destructive" });
+      toast({ title: "Error parsing PDF", description: getErrorMessage(error, "Something went wrong while parsing this PDF."), variant: "destructive" });
     } finally {
       setIsParsing(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -167,7 +167,7 @@ const LinkedInImport = ({
       });
       setParsed(null);
     } catch (error: unknown) {
-      toast({ title: "Import error", description: getErrorMessage(error), variant: "destructive" });
+      toast({ title: "Import error", description: getErrorMessage(error, "Something went wrong while importing this PDF data."), variant: "destructive" });
     } finally {
       setIsImporting(false);
     }
