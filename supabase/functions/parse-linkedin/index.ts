@@ -11,8 +11,8 @@ serve(async (req) => {
   }
 
   try {
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-    if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured");
 
     const { text } = await req.json();
 
@@ -52,105 +52,96 @@ Rules:
         ? text
         : `${text.slice(0, 14000)}\n\n[... middle content omitted for length ...]\n\n${text.slice(-10000)}`;
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const prompt = `${systemPrompt}
+
+Parse this LinkedIn profile text and return only valid JSON matching the requested schema.
+
+${modelInput}`;
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: `Parse this LinkedIn profile:\n\n${modelInput}` },
-        ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "return_parsed_profile",
-              description: "Return the parsed LinkedIn profile data",
-              parameters: {
-                type: "object",
-                properties: {
-                  headline: { type: "string" },
-                  summary: { type: "string" },
-                  location: { type: "string" },
-                  contact: {
-                    type: "object",
-                    properties: {
-                      email: { type: "string" },
-                      phone: { type: "string" },
-                      linkedin_url: { type: "string" },
-                      website_url: { type: "string" },
-                      twitter_url: { type: "string" },
-                      github_url: { type: "string" },
-                    },
-                    additionalProperties: false,
-                  },
-                  experiences: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        company_name: { type: "string" },
-                        role_title: { type: "string" },
-                        employment_type: { type: "string" },
-                        start_date: { type: "string" },
-                        end_date: { type: "string" },
-                        is_current: { type: "boolean" },
-                        description: { type: "string" },
-                      },
-                      required: ["company_name", "role_title"],
-                      additionalProperties: false,
-                    },
-                  },
-                  skills: {
-                    type: "array",
-                    items: { type: "string" },
-                  },
-                  education: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        institution: { type: "string" },
-                        degree: { type: "string" },
-                        field_of_study: { type: "string" },
-                        graduation_year: { type: "string" },
-                        description: { type: "string" },
-                      },
-                      required: ["institution"],
-                      additionalProperties: false,
-                    },
-                  },
-                  certifications: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        name: { type: "string" },
-                        issuer: { type: "string" },
-                        issue_date: { type: "string" },
-                        expiry_date: { type: "string" },
-                        credential_url: { type: "string" },
-                        description: { type: "string" },
-                      },
-                      required: ["name"],
-                      additionalProperties: false,
-                    },
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 2200,
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "object",
+              properties: {
+                headline: { type: "string" },
+                summary: { type: "string" },
+                location: { type: "string" },
+                contact: {
+                  type: "object",
+                  properties: {
+                    email: { type: "string" },
+                    phone: { type: "string" },
+                    linkedin_url: { type: "string" },
+                    website_url: { type: "string" },
+                    twitter_url: { type: "string" },
+                    github_url: { type: "string" },
                   },
                 },
-                required: ["experiences", "skills", "education", "certifications"],
-                additionalProperties: false,
+                experiences: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      company_name: { type: "string" },
+                      role_title: { type: "string" },
+                      employment_type: { type: "string" },
+                      start_date: { type: "string" },
+                      end_date: { type: "string" },
+                      is_current: { type: "boolean" },
+                      description: { type: "string" },
+                    },
+                    required: ["company_name", "role_title"],
+                  },
+                },
+                skills: {
+                  type: "array",
+                  items: { type: "string" },
+                },
+                education: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      institution: { type: "string" },
+                      degree: { type: "string" },
+                      field_of_study: { type: "string" },
+                      graduation_year: { type: "string" },
+                      description: { type: "string" },
+                    },
+                    required: ["institution"],
+                  },
+                },
+                certifications: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      name: { type: "string" },
+                      issuer: { type: "string" },
+                      issue_date: { type: "string" },
+                      expiry_date: { type: "string" },
+                      credential_url: { type: "string" },
+                      description: { type: "string" },
+                    },
+                    required: ["name"],
+                  },
+                },
               },
+              required: ["experiences", "skills", "education", "certifications"],
             },
           },
-        ],
-        tool_choice: { type: "function", function: { name: "return_parsed_profile" } },
-        temperature: 0.3,
-      }),
-    });
+        }),
+      }
+    );
 
     if (!response.ok) {
       if (response.status === 429) {
@@ -166,18 +157,18 @@ Rules:
         );
       }
       const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      throw new Error(`AI gateway error: ${response.status}`);
+      console.error("Gemini API error:", response.status, errorText);
+      throw new Error(`Gemini API error: ${response.status}`);
     }
 
     const data = await response.json();
-    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
 
-    if (!toolCall?.function?.arguments) {
+    if (!rawText) {
       throw new Error("Failed to parse LinkedIn profile");
     }
 
-    const parsed = JSON.parse(toolCall.function.arguments);
+    const parsed = JSON.parse(rawText);
 
     return new Response(
       JSON.stringify({ parsed }),
