@@ -166,7 +166,7 @@ const Onboarding = () => {
   };
 
   const cardClass = (active: boolean) =>
-    `rounded-3xl border p-5 text-left transition-all duration-200 ${
+    `rounded-3xl border p-4 text-left transition-all duration-200 sm:p-5 ${
       active
         ? "border-primary/50 bg-primary/10 shadow-[0_20px_60px_-30px_hsl(var(--primary)/0.55)]"
         : "border-border/80 bg-background/80 hover:border-primary/30 hover:bg-primary/5"
@@ -614,12 +614,12 @@ const Onboarding = () => {
   };
 
   return (
-    <div className="min-h-screen overflow-hidden bg-background">
+    <div className="min-h-screen bg-background">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_hsl(var(--primary)/0.18),_transparent_32%),radial-gradient(circle_at_bottom_right,_hsl(var(--primary-glow)/0.16),_transparent_28%),linear-gradient(180deg,_hsl(var(--background)),_hsl(var(--surface)))]" />
 
-      <div className="relative mx-auto flex min-h-screen w-full max-w-7xl items-center px-4 py-6 sm:px-6 lg:px-8">
-        <div className="grid w-full gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
-          <aside className="glass rounded-[32px] p-6 shadow-card sm:p-7">
+      <div className="relative mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+        <div className="grid w-full gap-4 lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-6">
+          <aside className="glass hidden rounded-[32px] p-6 shadow-card lg:block lg:p-7">
             <div className="mb-8 flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-primary text-primary-foreground shadow-glow">
                 <Briefcase className="h-5 w-5" />
@@ -686,21 +686,66 @@ const Onboarding = () => {
             </div>
           </aside>
 
-          <main className="glass rounded-[32px] p-6 shadow-card sm:p-8 lg:p-10">
+          <main className="glass min-w-0 rounded-[28px] p-4 shadow-card sm:rounded-[32px] sm:p-6 lg:p-10">
+            <div className="mb-6 space-y-4 border-b border-border/70 pb-5 lg:hidden">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-primary text-primary-foreground shadow-glow">
+                  <Briefcase className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-primary">PortfolioBuilder</p>
+                  <h1 className="text-xl font-bold tracking-tight">Let&apos;s shape your portfolio</h1>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {steps.map((step, index) => {
+                  const active = index === stepIndex;
+                  const done = index < stepIndex;
+
+                  return (
+                    <div
+                      key={step.id}
+                      className={`rounded-2xl border p-3 transition-all ${
+                        active
+                          ? "border-primary/40 bg-primary/10"
+                          : "border-border/80 bg-background/70"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${
+                            done
+                              ? "bg-emerald-400 text-slate-950"
+                              : active
+                                ? "bg-gradient-primary text-primary-foreground"
+                                : "bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          {done ? <Check className="h-3.5 w-3.5" /> : index + 1}
+                        </div>
+                        <span className="min-w-0 text-sm font-medium">{step.title}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             <motion.div
               key={stepIndex}
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               className="mx-auto flex w-full max-w-3xl flex-col"
             >
-              <div className="mb-8 flex flex-col gap-5 border-b border-border/70 pb-6 sm:flex-row sm:items-end sm:justify-between">
+              <div className="mb-6 flex flex-col gap-5 border-b border-border/70 pb-5 sm:mb-8 sm:pb-6 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <p className="text-sm font-semibold text-primary">{stepCopy[stepIndex].eyebrow}</p>
-                  <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">{stepCopy[stepIndex].title}</h2>
+                  <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">{stepCopy[stepIndex].title}</h2>
                   <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">{stepCopy[stepIndex].description}</p>
                 </div>
 
-                <div className="w-full max-w-[180px]">
+                <div className="w-full sm:max-w-[180px]">
                   <div className="mb-2 flex items-center justify-between text-xs uppercase tracking-[0.2em] text-muted-foreground">
                     <span>Progress</span>
                     <span>{stepIndex + 1}/4</span>
@@ -823,7 +868,7 @@ const Onboarding = () => {
                         </p>
                       </div>
 
-                      <div className="grid gap-5 lg:grid-cols-2">
+                      <div className="grid gap-5 xl:grid-cols-2">
                         <div className="rounded-3xl border border-border/80 bg-background/90 p-4">
                           <div className="flex items-center gap-2">
                             <Github className="h-4 w-4" />
@@ -832,14 +877,14 @@ const Onboarding = () => {
                           <p className="mt-2 text-sm text-muted-foreground">
                             Pull public repositories now and choose which ones to seed into your portfolio.
                           </p>
-                          <div className="mt-4 flex gap-2">
+                          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                             <Input
                               placeholder="GitHub username"
                               value={githubUsername}
                               onChange={(event) => setGithubUsername(event.target.value)}
                               onKeyDown={(event) => event.key === "Enter" && handleFetchGithub()}
                             />
-                            <Button type="button" onClick={handleFetchGithub} disabled={isFetchingGithub || !githubUsername.trim()}>
+                            <Button type="button" onClick={handleFetchGithub} disabled={isFetchingGithub || !githubUsername.trim()} className="sm:min-w-[96px]">
                               {isFetchingGithub ? <Loader2 className="h-4 w-4 animate-spin" /> : "Fetch"}
                             </Button>
                           </div>
@@ -862,7 +907,7 @@ const Onboarding = () => {
                                     }`}
                                   >
                                     <div className="flex items-start justify-between gap-3">
-                                      <div>
+                                      <div className="min-w-0">
                                         <p className="font-medium">{repo.name}</p>
                                         {repo.problem_statement && (
                                           <p className="mt-1 text-xs text-muted-foreground">{repo.problem_statement}</p>
@@ -1120,22 +1165,23 @@ const Onboarding = () => {
                 </div>
               )}
 
-              <div className="mt-10 flex items-center justify-between gap-4 border-t border-border/70 pt-6">
+              <div className="mt-8 flex flex-col-reverse gap-3 border-t border-border/70 pt-6 sm:mt-10 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                 <Button
                   type="button"
                   variant="hero-outline"
                   onClick={() => setStepIndex((current) => Math.max(0, current - 1))}
                   disabled={stepIndex === 0 || isSaving}
+                  className="w-full sm:w-auto"
                 >
                   Back
                 </Button>
 
                 {stepIndex < steps.length - 1 ? (
-                  <Button type="button" variant="hero" onClick={() => setStepIndex((current) => current + 1)} disabled={!canContinue()}>
+                  <Button type="button" variant="hero" onClick={() => setStepIndex((current) => current + 1)} disabled={!canContinue()} className="w-full sm:w-auto">
                     Continue <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
                 ) : (
-                  <Button type="button" variant="hero" onClick={handleFinish} disabled={!canContinue() || isSaving}>
+                  <Button type="button" variant="hero" onClick={handleFinish} disabled={!canContinue() || isSaving} className="w-full sm:w-auto">
                     {isSaving ? "Creating your portfolio..." : "Finish Setup"}
                   </Button>
                 )}
