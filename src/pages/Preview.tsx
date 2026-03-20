@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Download, LayoutPanelLeft, PenTool } from "lucide-react";
+import { ArrowLeft, LayoutPanelLeft, PenTool } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import SectionLayoutPicker from "@/components/preview/SectionLayoutPicker";
@@ -15,6 +15,7 @@ import { usePortfolio } from "@/hooks/usePortfolio";
 import { useProjects } from "@/hooks/useProjects";
 import { useSkills } from "@/hooks/useSkills";
 import { useProfile } from "@/hooks/useProfile";
+import { toast } from "@/hooks/use-toast";
 import { DEFAULT_SECTION_ORDER } from "@/lib/constants";
 import { normalizeHiddenSections, normalizeSectionOrder } from "@/lib/portfolioSections";
 
@@ -35,8 +36,6 @@ const Preview = () => {
   const templateId = portfolio?.template_id ?? "minimal";
   const dashboardHref = "/dashboard";
   const builderHref = portfolioId ? `/builder?portfolio=${portfolioId}` : "/builder";
-  const exportPortfolioHref = portfolioId ? `/export/portfolio?portfolio=${portfolioId}` : "/export/portfolio";
-  const exportResumeHref = portfolioId ? `/export/resume?portfolio=${portfolioId}` : "/export/resume";
 
   const { bio } = useBio(portfolioId);
   const { projects } = useProjects(portfolioId);
@@ -57,15 +56,99 @@ const Preview = () => {
   const [activeSidebarSection, setActiveSidebarSection] = useState<string | null>(null);
   const [sectionOrder, setSectionOrder] = useState<string[]>([]);
   const [hiddenSections, setHiddenSections] = useState<string[]>([]);
-  const templateRenderKey = `${templateId}:${JSON.stringify(sectionLayouts)}:${sectionOrder.join(",")}:${hiddenSections.join(",")}`;
+  const sectionLayoutSaveRef = useRef<number | null>(null);
+  const sectionControlsSaveRef = useRef<number | null>(null);
+  const pendingLayoutsRef = useRef<Record<string, string> | null>(null);
+  const pendingControlsRef = useRef<{ section_order: string[]; hidden_sections: string[] } | null>(null);
+  const lastSyncedLayoutsRef = useRef<Record<string, string>>({});
+  const lastSyncedOrderRef = useRef<string[]>([]);
+  const lastSyncedHiddenRef = useRef<string[]>([]);
 
   useEffect(() => {
-    if (portfolio?.section_layouts) {
-      setSectionLayouts(portfolio.section_layouts as Record<string, string>);
-    }
-    setSectionOrder(normalizeSectionOrder(portfolio?.section_order ?? defaultOrderForReset));
-    setHiddenSections(normalizeHiddenSections(portfolio?.hidden_sections));
+    const nextLayouts = (portfolio?.section_layouts as Record<string, string>) ?? {};
+    const nextOrder = normalizeSectionOrder(portfolio?.section_order ?? defaultOrderForReset);
+    const nextHidden = normalizeHiddenSections(portfolio?.hidden_sections);
+
+    lastSyncedLayoutsRef.current = nextLayouts;
+    lastSyncedOrderRef.current = nextOrder;
+    lastSyncedHiddenRef.current = nextHidden;
+
+    setSectionLayouts(nextLayouts);
+    setSectionOrder(nextOrder);
+    setHiddenSections(nextHidden);
   }, [defaultOrderForReset, portfolio]);
+
+  const rollbackSectionLayouts = () => {
+    setSectionLayouts(lastSyncedLayoutsRef.current);
+  };
+
+  const rollbackSectionControls = () => {
+    setSectionOrder(lastSyncedOrderRef.current);
+    setHiddenSections(lastSyncedHiddenRef.current);
+  };
+
+  const executeSectionLayoutsPersist = (nextLayouts: Record<string, string>) => {
+    pendingLayoutsRef.current = null;
+    updateSectionLayouts.mutate(nextLayouts, {
+      onError: () => {
+        rollbackSectionLayouts();
+        toast({
+          title: "Could not save layout",
+          description: "Your last layout change was not saved. We restored the previous version.",
+          variant: "destructive",
+        });
+      },
+    });
+  };
+
+  const executeSectionControlsPersist = (nextOrder: string[], nextHidden: string[]) => {
+    pendingControlsRef.current = null;
+    updateSectionControls.mutate(
+      {
+        section_order: nextOrder,
+        hidden_sections: nextHidden,
+      },
+      {
+        onError: () => {
+          rollbackSectionControls();
+          toast({
+            title: "Could not save section order",
+            description: "Your last section change was not saved. We restored the previous version.",
+            variant: "destructive",
+          });
+        },
+      }
+    );
+  };
+
+  const flushPendingSaves = () => {
+    if (sectionLayoutSaveRef.current) {
+      window.clearTimeout(sectionLayoutSaveRef.current);
+      sectionLayoutSaveRef.current = null;
+    }
+
+    if (sectionControlsSaveRef.current) {
+      window.clearTimeout(sectionControlsSaveRef.current);
+      sectionControlsSaveRef.current = null;
+    }
+
+    if (pendingLayoutsRef.current) {
+      executeSectionLayoutsPersist(pendingLayoutsRef.current);
+    }
+
+    if (pendingControlsRef.current) {
+      executeSectionControlsPersist(
+        pendingControlsRef.current.section_order,
+        pendingControlsRef.current.hidden_sections
+      );
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      flushPendingSaves();
+    };
+  }, []);
 
   useEffect(() => {
     if (!editMode) {
@@ -73,13 +156,39 @@ const Preview = () => {
     }
   }, [editMode]);
 
+  const queueSectionControlsPersist = (nextOrder: string[], nextHidden: string[]) => {
+    if (sectionControlsSaveRef.current) {
+      window.clearTimeout(sectionControlsSaveRef.current);
+    }
+
+    pendingControlsRef.current = {
+      section_order: nextOrder,
+      hidden_sections: nextHidden,
+    };
+
+    sectionControlsSaveRef.current = window.setTimeout(() => {
+      sectionControlsSaveRef.current = null;
+      executeSectionControlsPersist(nextOrder, nextHidden);
+    }, 220);
+  };
+
+  const queueSectionLayoutsPersist = (nextLayouts: Record<string, string>) => {
+    if (sectionLayoutSaveRef.current) {
+      window.clearTimeout(sectionLayoutSaveRef.current);
+    }
+
+    pendingLayoutsRef.current = nextLayouts;
+
+    sectionLayoutSaveRef.current = window.setTimeout(() => {
+      sectionLayoutSaveRef.current = null;
+      executeSectionLayoutsPersist(nextLayouts);
+    }, 220);
+  };
+
   const persistSectionControls = (nextOrder: string[], nextHidden: string[]) => {
     setSectionOrder(nextOrder);
     setHiddenSections(nextHidden);
-    updateSectionControls.mutate({
-      section_order: nextOrder,
-      hidden_sections: nextHidden,
-    });
+    queueSectionControlsPersist(nextOrder, nextHidden);
   };
 
   const handleMoveSection = (sectionId: string, direction: -1 | 1) => {
@@ -103,13 +212,13 @@ const Preview = () => {
     persistSectionControls(defaultOrderForReset, []);
   };
 
-  if (portfolioLoading || (portfolioParam && !portfolio)) {
+  if (portfolioLoading) {
     return (
       <div className="min-h-screen bg-background">
         <div className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur">
           <div className="container flex h-12 items-center justify-between">
             <Button variant="ghost" size="sm" asChild>
-              <Link to={dashboardHref}>
+              <Link to={dashboardHref} onClick={flushPendingSaves}>
                 <ArrowLeft className="mr-2 h-3.5 w-3.5" /> Back to Dashboard
               </Link>
             </Button>
@@ -126,29 +235,47 @@ const Preview = () => {
     );
   }
 
+  if (portfolioParam && !portfolio) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur">
+          <div className="container flex h-12 items-center justify-between">
+            <Button variant="ghost" size="sm" asChild>
+              <Link to={dashboardHref} onClick={flushPendingSaves}>
+                <ArrowLeft className="mr-2 h-3.5 w-3.5" /> Back to Dashboard
+              </Link>
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex min-h-[calc(100vh-3rem)] items-center justify-center px-6">
+          <div className="max-w-md text-center">
+            <h1 className="text-2xl font-semibold text-foreground">Preview not available</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              This portfolio could not be found, or you no longer have access to it.
+            </p>
+            <Button className="mt-6" asChild>
+              <Link to={dashboardHref}>Return to Dashboard</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <div className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur">
         <div className="container flex h-12 items-center justify-between gap-3">
           <Button variant="ghost" size="sm" asChild>
-            <Link to={dashboardHref}>
+            <Link to={dashboardHref} onClick={flushPendingSaves}>
               <ArrowLeft className="mr-2 h-3.5 w-3.5" /> Back to Dashboard
             </Link>
           </Button>
           <div className="flex items-center gap-2">
             <Badge variant="outline">Preview - {templateName}</Badge>
-            <Button size="sm" variant="outline" asChild>
-              <Link to={exportPortfolioHref} target="_blank" rel="noopener noreferrer">
-                <Download className="mr-2 h-3.5 w-3.5" /> Portfolio PDF
-              </Link>
-            </Button>
-            <Button size="sm" variant="outline" asChild>
-              <Link to={exportResumeHref} target="_blank" rel="noopener noreferrer">
-                <Download className="mr-2 h-3.5 w-3.5" /> Resume PDF
-              </Link>
-            </Button>
             <Button size="sm" asChild>
-              <Link to={builderHref}>
+              <Link to={builderHref} onClick={flushPendingSaves}>
                 <PenTool className="mr-2 h-3.5 w-3.5" /> Edit
               </Link>
             </Button>
@@ -156,7 +283,7 @@ const Preview = () => {
         </div>
       </div>
 
-      <div key={templateRenderKey}>
+      <div>
         <TemplateComponent
           bio={bio ?? null}
           projects={projects ?? []}
@@ -197,18 +324,19 @@ const Preview = () => {
           onSelect={(layoutId) => {
             const next = { ...sectionLayouts, [activeSidebarSection]: layoutId };
             setSectionLayouts(next);
-            updateSectionLayouts.mutate(next);
+            queueSectionLayoutsPersist(next);
           }}
           onClose={() => setActiveSidebarSection(null)}
         />
       )}
 
       {editMode && (
-        <div className="fixed left-6 top-20 z-40 hidden w-[340px] xl:block">
+        <div className="fixed left-6 top-1/2 z-40 hidden w-[340px] -translate-y-1/2 xl:block">
           <SectionManager
             order={sectionOrder}
             hiddenSections={hiddenSections}
             onMove={handleMoveSection}
+            onReorder={(nextOrder) => persistSectionControls(nextOrder, hiddenSections)}
             onToggleHidden={handleToggleHidden}
             onReset={handleResetSections}
           />

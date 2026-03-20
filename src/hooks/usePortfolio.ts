@@ -12,6 +12,15 @@ const generateShareToken = () => {
 export const usePortfolio = (specificPortfolioId?: string) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const portfolioQueryKey = ["portfolio", specificPortfolioId || "default", user?.id];
+
+  const syncPortfolioCaches = (nextPortfolio: Record<string, any>) => {
+    queryClient.setQueryData(portfolioQueryKey, nextPortfolio);
+    queryClient.setQueryData(["portfolios-all", user?.id], (current: Record<string, any>[] | undefined) => {
+      if (!current) return current;
+      return current.map((entry) => (entry.id === nextPortfolio.id ? { ...entry, ...nextPortfolio } : entry));
+    });
+  };
 
   const duplicateRows = async (
     table: string,
@@ -38,7 +47,7 @@ export const usePortfolio = (specificPortfolioId?: string) => {
 
   // Fetch the specific portfolio or the default one
   const { data: portfolio, isLoading } = useQuery({
-    queryKey: ["portfolio", specificPortfolioId || "default", user?.id],
+    queryKey: portfolioQueryKey,
     queryFn: async () => {
       if (specificPortfolioId) {
         const { data, error } = await supabase
@@ -228,8 +237,8 @@ export const usePortfolio = (specificPortfolioId?: string) => {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["portfolio"] });
+    onSuccess: (data) => {
+      syncPortfolioCaches(data);
     },
   });
 
@@ -246,9 +255,8 @@ export const usePortfolio = (specificPortfolioId?: string) => {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["portfolio"] });
-      queryClient.invalidateQueries({ queryKey: ["portfolios-all"] });
+    onSuccess: (data) => {
+      syncPortfolioCaches(data);
     },
   });
 
