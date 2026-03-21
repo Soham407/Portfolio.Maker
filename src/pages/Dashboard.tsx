@@ -13,6 +13,7 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,6 +36,7 @@ import { useExperience } from "@/hooks/useExperience";
 import { useEducation } from "@/hooks/useEducation";
 import { useContact } from "@/hooks/useContact";
 import { useCertifications } from "@/hooks/useCertifications";
+import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { VISIBILITY_OPTIONS } from "@/lib/constants";
 import {
@@ -42,7 +44,7 @@ import {
   getPortfolioPublicUrl,
   getPortfolioShareUrl,
 } from "@/lib/portfolioSharing";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 const SECTION_LABELS: Record<string, string> = {
   bio: "Bio",
@@ -58,6 +60,7 @@ const Dashboard = () => {
   const { user, signOut } = useAuth();
   const { profile, isLoading: profileLoading } = useProfile();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { toast } = useToast();
   const [selectedPortfolioId, setSelectedPortfolioId] = useState<string | undefined>(undefined);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -66,6 +69,8 @@ const Dashboard = () => {
   const [newName, setNewName] = useState("New Portfolio");
   const [newType, setNewType] = useState("general");
   const [copied, setCopied] = useState(false);
+  const [, startPortfolioSwitch] = useTransition();
+  const portfolioSelectionRequestRef = useRef(0);
 
   const {
     portfolio,
@@ -119,6 +124,157 @@ const Dashboard = () => {
 
     setSelectedPortfolioId(undefined);
   }, [allPortfolios, selectedPortfolioId]);
+
+  const prefetchPortfolioDashboardData = async (nextPortfolioId: string) => {
+    if (!user) return;
+
+    await Promise.allSettled([
+      queryClient.prefetchQuery({
+        queryKey: ["portfolio", nextPortfolioId, user.id],
+        queryFn: async () => {
+          const { data, error } = await supabase
+            .from("portfolios")
+            .select("*")
+            .eq("id", nextPortfolioId)
+            .eq("user_id", user.id)
+            .single();
+
+          if (error) throw error;
+          return data;
+        },
+      }),
+      queryClient.prefetchQuery({
+        queryKey: ["bio", nextPortfolioId],
+        queryFn: async () => {
+          const { data, error } = await supabase
+            .from("bio_sections")
+            .select("*")
+            .eq("portfolio_id", nextPortfolioId)
+            .maybeSingle();
+
+          if (error) throw error;
+          return data;
+        },
+      }),
+      queryClient.prefetchQuery({
+        queryKey: ["projects", nextPortfolioId],
+        queryFn: async () => {
+          const { data, error } = await supabase
+            .from("portfolio_projects")
+            .select("*")
+            .eq("portfolio_id", nextPortfolioId)
+            .order("display_order");
+
+          if (error) throw error;
+          return (data || []).map((project) => ({
+            ...project,
+            solution: project.solution_approach,
+          }));
+        },
+      }),
+      queryClient.prefetchQuery({
+        queryKey: ["skills", nextPortfolioId],
+        queryFn: async () => {
+          const { data, error } = await supabase
+            .from("skills")
+            .select("*")
+            .eq("portfolio_id", nextPortfolioId)
+            .order("display_order");
+
+          if (error) throw error;
+          return data || [];
+        },
+      }),
+      queryClient.prefetchQuery({
+        queryKey: ["experience", nextPortfolioId],
+        queryFn: async () => {
+          const { data, error } = await supabase
+            .from("experiences")
+            .select("*")
+            .eq("portfolio_id", nextPortfolioId)
+            .order("display_order");
+
+          if (error) throw error;
+          return data || [];
+        },
+      }),
+      queryClient.prefetchQuery({
+        queryKey: ["education", nextPortfolioId],
+        queryFn: async () => {
+          const { data, error } = await supabase
+            .from("education")
+            .select("*")
+            .eq("portfolio_id", nextPortfolioId)
+            .order("display_order");
+
+          if (error) throw error;
+          return data || [];
+        },
+      }),
+      queryClient.prefetchQuery({
+        queryKey: ["contact", nextPortfolioId],
+        queryFn: async () => {
+          const { data, error } = await supabase
+            .from("contact_info")
+            .select("*")
+            .eq("portfolio_id", nextPortfolioId)
+            .maybeSingle();
+
+          if (error) throw error;
+          return data;
+        },
+      }),
+      queryClient.prefetchQuery({
+        queryKey: ["certifications", nextPortfolioId],
+        queryFn: async () => {
+          const { data, error } = await supabase
+            .from("certifications")
+            .select("*")
+            .eq("portfolio_id", nextPortfolioId)
+            .order("display_order");
+
+          if (error) throw error;
+          return data || [];
+        },
+      }),
+      queryClient.prefetchQuery({
+        queryKey: ["dashboard", "viewCount", nextPortfolioId],
+        queryFn: async () => {
+          const { count, error } = await supabase
+            .from("portfolio_views")
+            .select("*", { count: "exact", head: true })
+            .eq("portfolio_id", nextPortfolioId);
+
+          if (error) throw error;
+          return count ?? 0;
+        },
+      }),
+      queryClient.prefetchQuery({
+        queryKey: ["dashboard", "completion", nextPortfolioId],
+        queryFn: async () => {
+          const { data, error } = await supabase.rpc("get_portfolio_completion", {
+            p_portfolio_id: nextPortfolioId,
+          });
+
+          if (error) throw error;
+          return data as number;
+        },
+      }),
+    ]);
+  };
+
+  const handleSelectPortfolio = (nextPortfolioId: string) => {
+    if (nextPortfolioId === portfolioId) return;
+
+    const requestId = ++portfolioSelectionRequestRef.current;
+    void prefetchPortfolioDashboardData(nextPortfolioId).finally(() => {
+      if (portfolioSelectionRequestRef.current !== requestId) return;
+
+      startPortfolioSwitch(() => {
+        setSelectedPortfolioId(nextPortfolioId);
+      });
+    });
+  };
 
   const handleShareDialogChange = (open: boolean) => {
     setIsShareOpen(open);
@@ -423,7 +579,7 @@ const Dashboard = () => {
                 {allPortfolios.length} total
               </Badge>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {allPortfolios.map((item) => (
                 <PortfolioCard
                   key={item.id}
@@ -432,7 +588,7 @@ const Dashboard = () => {
                   viewCount={viewCount}
                   canDelete={allPortfolios.length > 1}
                   visibilityOptions={VISIBILITY_OPTIONS}
-                  onSelect={setSelectedPortfolioId}
+                  onSelect={handleSelectPortfolio}
                   onShare={handleOpenShare}
                   onDuplicate={handleDuplicate}
                   onSetDefault={handleSetDefault}

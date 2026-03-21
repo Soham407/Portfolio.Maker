@@ -71,15 +71,15 @@ const PortfolioCard = ({
       onClick={() => onSelect(portfolio.id)}
       className={`relative cursor-pointer rounded-xl border bg-card p-4 shadow-card transition-all ${
         isSelected
-          ? "border-primary/40 ring-2 ring-primary/20"
+          ? "border-primary/60 bg-primary/5 ring-2 ring-primary/30 shadow-[0_18px_45px_-24px_rgba(99,102,241,0.55)]"
           : portfolio.is_default
-            ? "border-primary/40 ring-1 ring-primary/10"
-            : "border-border hover:border-primary/20"
+            ? "border-primary/30 bg-card/95 opacity-90 ring-1 ring-primary/10 hover:opacity-100"
+            : "border-border/70 bg-card/85 opacity-75 hover:border-primary/20 hover:bg-card hover:opacity-100"
       }`}
     >
       <div
         className={`absolute left-0 right-0 top-0 h-1 rounded-t-xl bg-gradient-primary ${
-          portfolio.is_default ? "opacity-100" : "opacity-30"
+          isSelected ? "opacity-100" : portfolio.is_default ? "opacity-70" : "opacity-20"
         }`}
       />
 
