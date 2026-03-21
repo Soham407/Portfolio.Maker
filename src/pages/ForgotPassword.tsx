@@ -12,6 +12,7 @@ const ForgotPassword = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSent, setIsSent] = useState(false);
   const { toast } = useToast();
+  const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : "Please try again.";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,8 +23,8 @@ const ForgotPassword = () => {
       });
       if (error) throw error;
       setIsSent(true);
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Error", description: getErrorMessage(error), variant: "destructive" });
     } finally {
       setIsLoading(false);
     }

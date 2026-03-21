@@ -6,6 +6,17 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+type GithubRepository = {
+  fork?: boolean;
+  name: string;
+  description?: string | null;
+  language?: string | null;
+  html_url: string;
+  homepage?: string | null;
+};
+
+const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : "Unknown error";
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -54,22 +65,22 @@ serve(async (req) => {
 
     const repos = await ghRes.json();
 
-    const projects = repos
-      .filter((r: any) => !r.fork)
-      .map((r: any) => ({
-        name: r.name,
-        problem_statement: r.description || "",
+    const projects = (repos as GithubRepository[])
+      .filter((repository) => !repository.fork)
+      .map((repository) => ({
+        name: repository.name,
+        problem_statement: repository.description || "",
         solution_approach: "",
-        technologies: r.language ? [r.language] : [],
-        github_url: r.html_url,
-        demo_url: r.homepage || null,
+        technologies: repository.language ? [repository.language] : [],
+        github_url: repository.html_url,
+        demo_url: repository.homepage || null,
       }));
 
     return new Response(JSON.stringify({ projects }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
+  } catch (error: unknown) {
+    return new Response(JSON.stringify({ error: getErrorMessage(error) }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

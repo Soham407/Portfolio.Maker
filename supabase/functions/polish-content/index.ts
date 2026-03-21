@@ -19,6 +19,11 @@ const ACTION_PROMPTS = {
   suggest: "Produce 1 improved variant and focus on coaching suggestions.",
 };
 
+type VariantCandidate = {
+  title?: string;
+  content?: string;
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -109,9 +114,9 @@ ${content}
     const parsed = rawText ? JSON.parse(rawText) : {};
 
     const variants = Array.isArray(parsed.variants)
-      ? parsed.variants.filter((variant: any) => typeof variant?.content === "string").map((variant: any, index: number) => ({
+      ? (parsed.variants as VariantCandidate[]).filter((variant) => typeof variant?.content === "string").map((variant, index: number) => ({
         title: typeof variant.title === "string" && variant.title.trim() ? variant.title : `Variant ${index + 1}`,
-        content: variant.content.trim(),
+        content: variant.content!.trim(),
       }))
       : [];
 

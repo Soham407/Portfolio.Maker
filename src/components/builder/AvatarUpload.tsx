@@ -10,6 +10,8 @@ type AvatarUploadProps = {
   onUpload: (url: string) => void;
 };
 
+const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : "Please try again.";
+
 const AvatarUpload = ({ currentUrl, onUpload }: AvatarUploadProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -44,8 +46,8 @@ const AvatarUpload = ({ currentUrl, onUpload }: AvatarUploadProps) => {
       const url = `${data.publicUrl}?t=${Date.now()}`;
       onUpload(url);
       toast({ title: "Avatar uploaded!" });
-    } catch (err: any) {
-      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Upload failed", description: getErrorMessage(error), variant: "destructive" });
     } finally {
       setIsUploading(false);
       if (fileRef.current) fileRef.current.value = "";

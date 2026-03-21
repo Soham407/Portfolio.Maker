@@ -19,6 +19,8 @@ type AIResponse = {
   error?: string;
 };
 
+const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : "We couldn't generate suggestions right now.";
+
 const AIPolishButton = ({ content, contentType, onAccept }: AIPolishButtonProps) => {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -58,10 +60,10 @@ const AIPolishButton = ({ content, contentType, onAccept }: AIPolishButtonProps)
       }
 
       setResult(data);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "AI suggestion failed",
-        description: error.message || "We couldn't generate suggestions right now.",
+        description: getErrorMessage(error),
         variant: "destructive",
       });
     } finally {

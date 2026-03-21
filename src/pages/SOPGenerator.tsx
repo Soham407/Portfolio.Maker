@@ -15,6 +15,7 @@ import { AI_TONES } from "@/lib/constants";
 const SOPGenerator = () => {
   const { portfolio } = usePortfolio();
   const { toast } = useToast();
+  const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : "Please try again.";
 
   const [purpose, setPurpose] = useState("");
   const [targetProgram, setTargetProgram] = useState("");
@@ -50,8 +51,8 @@ const SOPGenerator = () => {
 
       setSop(data.sop || "");
       toast({ title: "SOP generated!" });
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Error", description: getErrorMessage(error), variant: "destructive" });
     } finally {
       setIsGenerating(false);
     }

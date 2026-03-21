@@ -18,6 +18,7 @@ const UserTypeSelection = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
+  const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : "Please try again.";
 
   const handleContinue = async () => {
     if (!selected || !user) return;
@@ -29,8 +30,8 @@ const UserTypeSelection = () => {
         .eq("id", user.id);
       if (error) throw error;
       navigate("/career-setup");
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Error", description: getErrorMessage(error), variant: "destructive" });
     } finally {
       setIsLoading(false);
     }

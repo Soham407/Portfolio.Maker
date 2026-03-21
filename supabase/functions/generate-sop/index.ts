@@ -6,6 +6,35 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+type SkillRecord = {
+  skill_name?: string | null;
+  skill_type?: string | null;
+};
+
+type ProjectRecord = {
+  name: string;
+  problem_statement?: string | null;
+  technologies?: string[] | null;
+};
+
+type ExperienceRecord = {
+  role_title: string;
+  company_name: string;
+  employment_type?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  is_current?: boolean | null;
+  description?: string | null;
+};
+
+type EducationRecord = {
+  degree?: string | null;
+  field_of_study?: string | null;
+  institution: string;
+  graduation_year?: string | number | null;
+  cgpa?: string | number | null;
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -63,8 +92,12 @@ serve(async (req) => {
     const education = educationRes.data || [];
     const profile = profileRes.data;
 
-    const learnedSkills = skills.filter((s: any) => (s.skill_type || "learned") === "learned").map((s: any) => s.skill_name);
-    const implementedSkills = skills.filter((s: any) => s.skill_type === "implemented").map((s: any) => s.skill_name);
+    const learnedSkills = (skills as SkillRecord[])
+      .filter((skill) => (skill.skill_type || "learned") === "learned")
+      .map((skill) => skill.skill_name);
+    const implementedSkills = (skills as SkillRecord[])
+      .filter((skill) => skill.skill_type === "implemented")
+      .map((skill) => skill.skill_name);
 
     // Build context for AI
     const portfolioContext = `
@@ -81,13 +114,13 @@ SKILLS LEARNED: ${learnedSkills.join(", ") || "None listed"}
 SKILLS IMPLEMENTED (in real projects): ${implementedSkills.join(", ") || "None listed"}
 
 PROJECTS:
-${projects.map((p: any) => `- ${p.name}: ${p.problem_statement || ""} | Technologies: ${(p.technologies || []).join(", ")}`).join("\n") || "None listed"}
+${(projects as ProjectRecord[]).map((project) => `- ${project.name}: ${project.problem_statement || ""} | Technologies: ${(project.technologies || []).join(", ")}`).join("\n") || "None listed"}
 
 EXPERIENCE:
-${experiences.map((e: any) => `- ${e.role_title} at ${e.company_name} (${e.employment_type}) ${e.start_date || ""} - ${e.is_current ? "Present" : e.end_date || ""}: ${e.description || ""}`).join("\n") || "None listed"}
+${(experiences as ExperienceRecord[]).map((experience) => `- ${experience.role_title} at ${experience.company_name} (${experience.employment_type}) ${experience.start_date || ""} - ${experience.is_current ? "Present" : experience.end_date || ""}: ${experience.description || ""}`).join("\n") || "None listed"}
 
 EDUCATION:
-${education.map((e: any) => `- ${e.degree || ""} in ${e.field_of_study || ""} from ${e.institution} (${e.graduation_year || ""}) CGPA: ${e.cgpa || "N/A"}`).join("\n") || "None listed"}
+${(education as EducationRecord[]).map((entry) => `- ${entry.degree || ""} in ${entry.field_of_study || ""} from ${entry.institution} (${entry.graduation_year || ""}) CGPA: ${entry.cgpa || "N/A"}`).join("\n") || "None listed"}
 `.trim();
 
     const toneMap: Record<string, string> = {

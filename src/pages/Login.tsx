@@ -22,6 +22,7 @@ const Login = () => {
   const { signIn, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : "Invalid credentials";
 
   useEffect(() => {
     if (!user) return;
@@ -36,8 +37,8 @@ const Login = () => {
     setIsLoading(true);
     try {
       await signIn(email, password);
-    } catch (error: any) {
-      toast({ title: "Login failed", description: error.message || "Invalid credentials", variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Login failed", description: getErrorMessage(error), variant: "destructive" });
     } finally {
       setIsLoading(false);
     }

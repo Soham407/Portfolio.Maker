@@ -14,6 +14,7 @@ const RoleSelection = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
+  const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : "Please try again.";
 
   const handleContinue = async () => {
     if (!role || !user) return;
@@ -37,8 +38,8 @@ const RoleSelection = () => {
         if (portError) throw portError;
       }
       navigate("/dashboard");
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Error", description: getErrorMessage(error), variant: "destructive" });
     } finally {
       setIsLoading(false);
     }

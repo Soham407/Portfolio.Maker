@@ -32,6 +32,7 @@ const CareerSetup = () => {
 
   // Get careers based on user type, with fallback
   const careers = CAREER_TYPES[userType as keyof typeof CAREER_TYPES] || CAREER_TYPES.fresher;
+  const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : "Please try again.";
 
   const handleContinue = async () => {
     if (!careerType || !skillLevel || !user) return;
@@ -43,8 +44,8 @@ const CareerSetup = () => {
         .eq("id", user.id);
       if (error) throw error;
       navigate("/role-selection");
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Error", description: getErrorMessage(error), variant: "destructive" });
     } finally {
       setIsLoading(false);
     }

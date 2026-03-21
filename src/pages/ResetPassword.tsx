@@ -16,6 +16,7 @@ const ResetPassword = () => {
   const [isValidSession, setIsValidSession] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : "Please try again.";
 
   useEffect(() => {
     // Check if we have a recovery session
@@ -48,8 +49,8 @@ const ResetPassword = () => {
       if (error) throw error;
       setIsReset(true);
       setTimeout(() => navigate("/dashboard"), 2000);
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Error", description: getErrorMessage(error), variant: "destructive" });
     } finally {
       setIsLoading(false);
     }

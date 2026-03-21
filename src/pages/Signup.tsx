@@ -23,6 +23,7 @@ const Signup = () => {
   const { signUp, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : "Something went wrong";
 
   useEffect(() => {
     if (!user) return;
@@ -42,8 +43,8 @@ const Signup = () => {
     try {
       await signUp(email, password, fullName);
       toast({ title: "Account created!", description: "Check your email to confirm, or log in if email confirmation is disabled." });
-    } catch (error: any) {
-      toast({ title: "Signup failed", description: error.message || "Something went wrong", variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Signup failed", description: getErrorMessage(error), variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
