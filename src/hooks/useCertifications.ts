@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { sanitizeText, sanitizeUrl } from "@/lib/sanitize";
+import { VALIDATION_RULES } from "@/lib/constants";
 
 type CertificationInput = {
   name: string;
@@ -40,7 +41,7 @@ export const useCertifications = (portfolioId: string | undefined) => {
           issue_date: input.issue_date || null,
           expiry_date: input.expiry_date || null,
           credential_url: input.credential_url ? sanitizeUrl(input.credential_url) : null,
-          description: input.description ? sanitizeText(input.description).slice(0, 300) : null,
+          description: input.description ? sanitizeText(input.description).slice(0, VALIDATION_RULES.SECTION_TEXT_MAX) : null,
           portfolio_id: portfolioId!,
           user_id: user!.id,
           display_order: certifications.length,

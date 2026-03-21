@@ -117,6 +117,7 @@ export const usePortfolio = (specificPortfolioId?: string) => {
           visibility: "private",
           is_public: false,
           hidden_sections: [],
+          not_applicable_sections: [],
           share_token: generateShareToken(),
           section_order: [...sectionOrder] as string[], // Convert readonly to mutable
         })
@@ -145,6 +146,7 @@ export const usePortfolio = (specificPortfolioId?: string) => {
           template_id: source.template_id,
           section_layouts: source.section_layouts,
           hidden_sections: source.hidden_sections || [],
+          not_applicable_sections: source.not_applicable_sections || [],
           share_token: generateShareToken(),
           is_public: false,
           visibility: "private",
@@ -162,6 +164,7 @@ export const usePortfolio = (specificPortfolioId?: string) => {
       await duplicateRows("education", sourcePortfolioId, newPortfolio.id);
       await duplicateRows("contact_info", sourcePortfolioId, newPortfolio.id, true);
       await duplicateRows("certifications", sourcePortfolioId, newPortfolio.id);
+      await duplicateRows("custom_sections", sourcePortfolioId, newPortfolio.id);
 
       return newPortfolio;
     },
@@ -243,7 +246,7 @@ export const usePortfolio = (specificPortfolioId?: string) => {
   });
 
   const updateSectionControls = useMutation({
-    mutationFn: async (updates: { section_order?: string[]; hidden_sections?: string[] }) => {
+    mutationFn: async (updates: { section_order?: string[]; hidden_sections?: string[]; not_applicable_sections?: string[] }) => {
       const targetId = specificPortfolioId || portfolio?.id;
       if (!targetId) throw new Error("No portfolio to update");
       const { data, error } = await supabase

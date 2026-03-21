@@ -164,6 +164,47 @@ export type Database = {
           },
         ]
       }
+      custom_sections: {
+        Row: {
+          body: string
+          created_at: string
+          display_order: number
+          id: string
+          portfolio_id: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          body?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          portfolio_id: string
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          portfolio_id?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_sections_portfolio_id_fkey"
+            columns: ["portfolio_id"]
+            isOneToOne: false
+            referencedRelation: "portfolios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       education: {
         Row: {
           cgpa: string | null
@@ -384,6 +425,7 @@ export type Database = {
           last_moderated_at: string | null
           moderation_status: string | null
           name: string | null
+          not_applicable_sections: string[] | null
           portfolio_type: string | null
           hidden_sections: string[] | null
           share_token: string | null
@@ -404,6 +446,7 @@ export type Database = {
           last_moderated_at?: string | null
           moderation_status?: string | null
           name?: string | null
+          not_applicable_sections?: string[] | null
           portfolio_type?: string | null
           hidden_sections?: string[] | null
           share_token?: string | null
@@ -424,6 +467,7 @@ export type Database = {
           last_moderated_at?: string | null
           moderation_status?: string | null
           name?: string | null
+          not_applicable_sections?: string[] | null
           portfolio_type?: string | null
           hidden_sections?: string[] | null
           share_token?: string | null

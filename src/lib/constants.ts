@@ -1,6 +1,12 @@
 export const VALIDATION_RULES = {
+  SECTION_TEXT_MAX: 2500,
+  CUSTOM_SECTIONS: {
+    MAX_COUNT: 3,
+    TITLE_MAX: 120,
+    BODY_MAX: 2500,
+  },
   BIO: {
-    MAX_LENGTH: 200,
+    MAX_LENGTH: 2500,
     HEADLINE_MAX: 150,
     NAME_MAX: 100,
   },
@@ -8,7 +14,7 @@ export const VALIDATION_RULES = {
     MIN_COUNT: 1,
     MAX_COUNT: 5,
     NAME_MAX: 100,
-    DESCRIPTION_MAX: 500,
+    DESCRIPTION_MAX: 2500,
   },
   SKILLS: {
     MAX_COUNT: 20,

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { sanitizeText } from "@/lib/sanitize";
+import { VALIDATION_RULES } from "@/lib/constants";
 
 export const useExperience = (portfolioId: string | undefined) => {
   const { user } = useAuth();
@@ -31,7 +32,7 @@ export const useExperience = (portfolioId: string | undefined) => {
           employment_type: input.employment_type,
           start_date: input.start_date || null,
           end_date: input.end_date || null,
-          description: input.description ? sanitizeText(input.description).slice(0, 500) : null,
+          description: input.description ? sanitizeText(input.description).slice(0, VALIDATION_RULES.SECTION_TEXT_MAX) : null,
           is_current: input.is_current || false,
           portfolio_id: portfolioId!,
           user_id: user!.id,
@@ -55,7 +56,7 @@ export const useExperience = (portfolioId: string | undefined) => {
           employment_type: input.employment_type,
           start_date: input.start_date || null,
           end_date: input.end_date || null,
-          description: input.description ? sanitizeText(input.description).slice(0, 500) : null,
+          description: input.description ? sanitizeText(input.description).slice(0, VALIDATION_RULES.SECTION_TEXT_MAX) : null,
           is_current: input.is_current || false,
         })
         .eq("id", id)

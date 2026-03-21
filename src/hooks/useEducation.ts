@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { sanitizeText } from "@/lib/sanitize";
+import { VALIDATION_RULES } from "@/lib/constants";
 
 export const useEducation = (portfolioId: string | undefined) => {
   const { user } = useAuth();
@@ -31,7 +32,7 @@ export const useEducation = (portfolioId: string | undefined) => {
           field_of_study: input.field_of_study ? sanitizeText(input.field_of_study).slice(0, 100) : null,
           graduation_year: input.graduation_year || null,
           cgpa: input.cgpa || null,
-          description: input.description ? sanitizeText(input.description).slice(0, 300) : null,
+          description: input.description ? sanitizeText(input.description).slice(0, VALIDATION_RULES.SECTION_TEXT_MAX) : null,
           portfolio_id: portfolioId!,
           user_id: user!.id,
           display_order: education.length,
@@ -54,7 +55,7 @@ export const useEducation = (portfolioId: string | undefined) => {
           field_of_study: input.field_of_study ? sanitizeText(input.field_of_study).slice(0, 100) : null,
           graduation_year: input.graduation_year || null,
           cgpa: input.cgpa || null,
-          description: input.description ? sanitizeText(input.description).slice(0, 300) : null,
+          description: input.description ? sanitizeText(input.description).slice(0, VALIDATION_RULES.SECTION_TEXT_MAX) : null,
         })
         .eq("id", id)
         .select()

@@ -2,24 +2,25 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Sparkles, Star, CheckCircle2 } from "lucide-react";
 import { motion } from "framer-motion";
+import { useAuth } from "@/contexts/AuthContext";
 
 const floatingCards = [
   {
-    icon: "✦",
+    icon: "*",
     label: "AI-Polished Bio",
     sub: "Powered by Claude",
     color: "from-violet-500/10 to-purple-500/5 border-violet-200/50",
     pos: "top-[15%] left-[3%] lg:left-[8%]",
   },
   {
-    icon: "⚡",
+    icon: "+",
     label: "GitHub Synced",
     sub: "12 repos imported",
     color: "from-emerald-500/10 to-teal-500/5 border-emerald-200/50",
     pos: "top-[20%] right-[3%] lg:right-[8%]",
   },
   {
-    icon: "👁",
+    icon: "o",
     label: "247 Profile Views",
     sub: "This week",
     color: "from-orange-500/10 to-amber-500/5 border-orange-200/50",
@@ -28,14 +29,15 @@ const floatingCards = [
 ];
 
 const Hero = () => {
+  const { user, loading } = useAuth();
+  const authenticated = !loading && !!user;
+
   return (
     <section className="relative flex min-h-screen items-center justify-center overflow-hidden pt-16">
-      {/* Background */}
       <div className="pointer-events-none absolute inset-0 bg-gradient-hero" />
       <div className="pointer-events-none absolute left-1/2 top-1/3 h-[700px] w-[700px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/5 blur-3xl" />
       <div className="pointer-events-none absolute right-1/4 bottom-1/4 h-[400px] w-[400px] rounded-full bg-purple-500/5 blur-3xl" />
 
-      {/* Floating Cards — hidden on mobile to avoid clutter */}
       {floatingCards.map((card, i) => (
         <motion.div
           key={card.label}
@@ -60,7 +62,6 @@ const Hero = () => {
           transition={{ duration: 0.6 }}
           className="mx-auto max-w-3xl"
         >
-          {/* Badge */}
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -68,32 +69,32 @@ const Hero = () => {
             className="mb-8 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-sm text-primary"
           >
             <Sparkles className="h-3.5 w-3.5" />
-            AI-Powered Portfolio Builder
+            {authenticated ? "Welcome Back" : "AI-Powered Portfolio Builder"}
           </motion.div>
 
           <h1 className="mb-6 text-5xl font-extrabold leading-[1.1] tracking-tight md:text-7xl">
-            Build Your{" "}
-            <span className="text-gradient">Dream Portfolio</span>
-            {" "}in Minutes
+            {authenticated ? (
+              <>Keep Your <span className="text-gradient">Portfolio Moving</span></>
+            ) : (
+              <>Build Your <span className="text-gradient">Dream Portfolio</span> in Minutes</>
+            )}
           </h1>
 
           <p className="mx-auto mb-10 max-w-xl text-lg leading-relaxed text-muted-foreground">
-            Create a stunning, recruiter-ready portfolio with AI-powered content,
-            premium templates, and GitHub integration — no coding required.
+            {authenticated
+              ? "Jump back into the builder, refresh your template, and publish updates without losing momentum."
+              : "Create a stunning, recruiter-ready portfolio with AI-powered content, premium templates, and GitHub integration — no coding required."}
           </p>
 
-          {/* Trust badges */}
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3, duration: 0.4 }}
             className="mb-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground"
           >
-            {[
-              "Free to start",
-              "No credit card required",
-              "Custom URL",
-            ].map((item) => (
+            {(authenticated
+              ? ["Continue editing", "Change templates anytime", "Share when ready"]
+              : ["Free to start", "No credit card required", "Custom URL"]).map((item) => (
               <span key={item} className="flex items-center gap-1.5">
                 <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                 {item}
@@ -102,18 +103,33 @@ const Hero = () => {
           </motion.div>
 
           <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
-            <Button variant="hero" size="lg" className="h-12 px-8 text-base" asChild>
-              <Link to="/signup">
-                Start Building Free
-                <ArrowRight className="ml-1 h-4 w-4" />
-              </Link>
-            </Button>
-            <Button variant="hero-outline" size="lg" className="h-12 px-8 text-base" asChild>
-              <a href="#templates">View Templates</a>
-            </Button>
+            {authenticated ? (
+              <>
+                <Button variant="hero" size="lg" className="h-12 px-8 text-base" asChild>
+                  <Link to="/builder">
+                    Continue Building
+                    <ArrowRight className="ml-1 h-4 w-4" />
+                  </Link>
+                </Button>
+                <Button variant="hero-outline" size="lg" className="h-12 px-8 text-base" asChild>
+                  <Link to="/dashboard">Open Dashboard</Link>
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="hero" size="lg" className="h-12 px-8 text-base" asChild>
+                  <Link to="/signup">
+                    Start Building Free
+                    <ArrowRight className="ml-1 h-4 w-4" />
+                  </Link>
+                </Button>
+                <Button variant="hero-outline" size="lg" className="h-12 px-8 text-base" asChild>
+                  <a href="#templates">View Templates</a>
+                </Button>
+              </>
+            )}
           </div>
 
-          {/* Social proof */}
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -134,7 +150,6 @@ const Hero = () => {
             </div>
           </motion.div>
 
-          {/* Stats */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -144,7 +159,7 @@ const Hero = () => {
             {[
               { value: "10K+", label: "Portfolios Created" },
               { value: "5", label: "Premium Templates" },
-              { value: "98%", label: "User Satisfaction" },
+              { value: authenticated ? "Live" : "98%", label: authenticated ? "Builder Ready" : "User Satisfaction" },
             ].map((stat) => (
               <div key={stat.label}>
                 <div className="text-2xl font-bold md:text-3xl">{stat.value}</div>

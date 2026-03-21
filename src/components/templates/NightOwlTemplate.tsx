@@ -4,6 +4,7 @@ import type { PortfolioData } from "./PortfolioTemplateProps";
 import SectionWrapper from "@/components/preview/SectionWrapper";
 import { getRenderableSectionIds } from "@/lib/portfolioSections";
 import { getEffectiveLayout } from "@/lib/sectionLayouts";
+import { buildCustomSectionMap, getCustomSectionAvailability, renderSimpleCustomSection } from "@/lib/templateSectionHelpers";
 
 const slideLeft: any = {
   hidden: { opacity: 0, x: -30 },
@@ -16,7 +17,7 @@ const BG = "#0d1117";
 const CARD_BG = "#161b22";
 const BORDER = "#30363d";
 
-export default function NightOwlTemplate({ bio, projects, skills, experiences, education, contact, certifications, sectionLayouts, sectionOrder, hiddenSections, editMode, onSectionEdit }: PortfolioData) {
+export default function NightOwlTemplate({ bio, projects, skills, experiences, education, contact, certifications, customSections, sectionLayouts, sectionOrder, hiddenSections, notApplicableSections, editMode, onSectionEdit }: PortfolioData) {
   const name = [bio?.first_name, bio?.last_name].filter(Boolean).join(" ") || "Your Name";
   const hasContactLinks = Boolean(contact && (contact.email || contact.phone || contact.github_url || contact.linkedin_url || contact.twitter_url || contact.website_url));
 
@@ -41,11 +42,26 @@ export default function NightOwlTemplate({ bio, projects, skills, experiences, e
     education: education.length > 0,
     certifications: certifications.length > 0,
     contact: hasContactLinks,
-  });
+    ...getCustomSectionAvailability(customSections),
+  }, notApplicableSections);
+
+  const customSectionMap = buildCustomSectionMap(customSections, (section) =>
+    renderSimpleCustomSection(
+      section,
+      `custom:${section.id}`,
+      editMode,
+      onSectionEdit,
+      "rounded-lg p-6",
+      "mb-2 font-mono text-sm font-semibold uppercase tracking-widest",
+      "text-sm leading-7",
+      { background: CARD_BG, border: `1px solid ${BORDER}`, color: "#c9d1d9" }
+    )
+  );
 
   const navLinks = renderableSections.filter((sectionId) => ["projects", "experience", "skills", "contact", "education", "certifications"].includes(sectionId));
 
   const sectionContent: Record<string, JSX.Element> = {
+    ...customSectionMap,
     bio: (
       <SectionWrapper key="bio" id="bio" editMode={editMode} onEdit={onSectionEdit}>
         <section id="bio" className="px-8 py-20 md:px-16">

@@ -1,4 +1,5 @@
 import DOMPurify from "dompurify";
+import { VALIDATION_RULES } from "./constants";
 
 export const sanitizeHtml = (input: string): string => {
   return DOMPurify.sanitize(input, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
@@ -37,14 +38,14 @@ export const sanitizePortfolioData = {
     first_name: sanitizeText(data.first_name).slice(0, 100),
     last_name: sanitizeText(data.last_name).slice(0, 100),
     headline: sanitizeText(data.headline).slice(0, 150),
-    bio: sanitizeText(data.bio).slice(0, 200),
+    bio: sanitizeText(data.bio).slice(0, VALIDATION_RULES.BIO.MAX_LENGTH),
     location: data.location ? sanitizeText(data.location).slice(0, 100) : null,
     avatar_url: data.avatar_url ? sanitizeUrl(data.avatar_url) : null,
   }),
   project: (data: { name: string; problem_statement: string; solution_approach: string; technologies: string[]; github_url?: string; project_url?: string }) => ({
     name: sanitizeText(data.name).slice(0, 100),
-    problem_statement: sanitizeText(data.problem_statement).slice(0, 500),
-    solution_approach: sanitizeText(data.solution_approach).slice(0, 500),
+    problem_statement: sanitizeText(data.problem_statement).slice(0, VALIDATION_RULES.PROJECTS.DESCRIPTION_MAX),
+    solution_approach: sanitizeText(data.solution_approach).slice(0, VALIDATION_RULES.PROJECTS.DESCRIPTION_MAX),
     technologies: sanitizeArray(data.technologies).slice(0, 10),
     github_url: data.github_url ? sanitizeUrl(data.github_url) : null,
     project_url: data.project_url ? sanitizeUrl(data.project_url) : null,
@@ -58,3 +59,8 @@ export const sanitizePortfolioData = {
     website_url: data.website_url ? sanitizeUrl(data.website_url) : null,
   }),
 };
+
+export const sanitizeCustomSection = (data: { title: string; body: string }) => ({
+  title: sanitizeText(data.title).slice(0, VALIDATION_RULES.CUSTOM_SECTIONS.TITLE_MAX),
+  body: sanitizeText(data.body).slice(0, VALIDATION_RULES.CUSTOM_SECTIONS.BODY_MAX),
+});

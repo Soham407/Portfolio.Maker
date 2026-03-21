@@ -8,7 +8,9 @@ import { useExperience } from "@/hooks/useExperience";
 import { useEducation } from "@/hooks/useEducation";
 import { useContact } from "@/hooks/useContact";
 import { useCertifications } from "@/hooks/useCertifications";
+import { useCustomSections } from "@/hooks/useCustomSections";
 import PrintablePortfolio from "@/components/export/PrintablePortfolio";
+import { createCustomSectionId } from "@/lib/portfolioSections";
 
 const ExportPortfolio = () => {
   const { mode } = useParams<{ mode: string }>();
@@ -25,6 +27,7 @@ const ExportPortfolio = () => {
   const { education } = useEducation(portfolioId);
   const { contact } = useContact(portfolioId);
   const { certifications } = useCertifications(portfolioId);
+  const { customSections } = useCustomSections(portfolioId);
 
   useEffect(() => {
     if (!portfolioId) return;
@@ -42,6 +45,11 @@ const ExportPortfolio = () => {
     );
   }
 
+  const sectionOrder = [
+    ...(portfolio?.section_order ?? []),
+    ...customSections.map((section) => createCustomSectionId(section.id)),
+  ];
+
   return (
     <PrintablePortfolio
       mode={exportMode}
@@ -53,8 +61,10 @@ const ExportPortfolio = () => {
       education={education}
       contact={contact ?? null}
       certifications={certifications}
-      sectionOrder={portfolio?.section_order ?? undefined}
+      customSections={customSections}
+      sectionOrder={sectionOrder}
       hiddenSections={portfolio?.hidden_sections ?? undefined}
+      notApplicableSections={portfolio?.not_applicable_sections ?? undefined}
     />
   );
 };

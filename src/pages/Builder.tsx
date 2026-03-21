@@ -9,7 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   Briefcase, Save, Eye, ArrowLeft, Plus, Trash2, X, Github, Loader2, Check,
   Award, User, FolderGit2, Code2, Laptop2, GraduationCap, BadgeCheck, Mail,
-  ChevronRight, Settings2, Globe, Lock, CheckCircle2, XCircle
+  ChevronRight, Settings2, Globe, Lock, CheckCircle2, XCircle, FileText
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import LinkedInImport from "@/components/LinkedInImport";
@@ -26,13 +26,17 @@ import { useExperience } from "@/hooks/useExperience";
 import { useEducation } from "@/hooks/useEducation";
 import { useContact } from "@/hooks/useContact";
 import { useCertifications } from "@/hooks/useCertifications";
+import { useCustomSections } from "@/hooks/useCustomSections";
 import { useToast } from "@/hooks/use-toast";
 import { VALIDATION_RULES, EMPLOYMENT_TYPES, PORTFOLIO_TYPES, VISIBILITY_OPTIONS } from "@/lib/constants";
 import { supabase } from "@/integrations/supabase/client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { normalizeImportedDate, type ParsedContact } from "@/lib/imports";
+import { Switch } from "@/components/ui/switch";
+import { createCustomSectionId } from "@/lib/portfolioSections";
 
-type Section = "bio" | "projects" | "skills" | "experience" | "education" | "certifications" | "contact" | "settings";
+type Section = "bio" | "projects" | "skills" | "experience" | "education" | "certifications" | "custom" | "contact" | "settings";
+type CustomSectionDraft = { title: string; body: string };
 
 const sections: { id: Section; label: string; icon: React.ElementType; description: string }[] = [
   { id: "bio", label: "Bio", icon: User, description: "Name, headline & about" },
@@ -41,6 +45,7 @@ const sections: { id: Section; label: string; icon: React.ElementType; descripti
   { id: "experience", label: "Experience", icon: Laptop2, description: "Work history" },
   { id: "education", label: "Education", icon: GraduationCap, description: "Academic background" },
   { id: "certifications", label: "Certifications", icon: BadgeCheck, description: "Credentials & awards" },
+  { id: "custom", label: "Custom", icon: FileText, description: "Flexible extra sections" },
   { id: "contact", label: "Contact", icon: Mail, description: "How to reach you" },
   { id: "settings", label: "Settings", icon: Settings2, description: "Username & visibility" },
 ];
@@ -62,6 +67,7 @@ const Builder = () => {
   const { education, addEducation, updateEducation, deleteEducation } = useEducation(portfolioId);
   const { contact, saveContact } = useContact(portfolioId);
   const { certifications, addCertification, deleteCertification } = useCertifications(portfolioId);
+  const { customSections, addCustomSection, updateCustomSection, deleteCustomSection } = useCustomSections(portfolioId);
 
   const [activeSection, setActiveSection] = useState<Section>(() => {
     const param = searchParams.get("section") as Section | null;
@@ -89,9 +95,30 @@ const Builder = () => {
   const [expForm, setExpForm] = useState({ company_name: "", role_title: "", employment_type: "full-time", start_date: "", end_date: "", description: "", is_current: false });
   const [eduForm, setEduForm] = useState({ institution: "", degree: "", field_of_study: "", graduation_year: "", cgpa: "", description: "" });
   const [certForm, setCertForm] = useState({ name: "", issuer: "", issue_date: "", expiry_date: "", credential_url: "", description: "" });
+  const [customSectionForm, setCustomSectionForm] = useState({ title: "", body: "" });
+  const [customSectionDrafts, setCustomSectionDrafts] = useState<Record<string, CustomSectionDraft>>({});
+  const [savingCustomSectionIds, setSavingCustomSectionIds] = useState<string[]>([]);
+  const customSectionSaveTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const pendingCustomSectionDraftsRef = useRef<Record<string, CustomSectionDraft>>({});
+  const savingCustomSectionIdsRef = useRef<string[]>([]);
   const hiddenSections = new Set(((portfolio?.hidden_sections as string[] | null) || []));
-  const experienceDeferred = hiddenSections.has("experience");
-  const certificationsDeferred = hiddenSections.has("certifications");
+  const notApplicableSections = new Set(((portfolio?.not_applicable_sections as string[] | null) || []));
+  const isSectionNotApplicable = (sectionId: string) => notApplicableSections.has(sectionId);
+
+  const toggleNotApplicable = async (sectionId: string, enabled: boolean) => {
+    const current = ((portfolio?.not_applicable_sections as string[] | null) || []).filter(Boolean);
+    const next = enabled
+      ? Array.from(new Set([...current, sectionId]))
+      : current.filter((entry) => entry !== sectionId);
+
+    await updateSectionControls.mutateAsync({ not_applicable_sections: next });
+    toast({
+      title: enabled ? "Section marked as not applicable" : "Section restored",
+      description: enabled
+        ? "It will stay hidden from preview, public pages, and export while still counting as intentional."
+        : "This section is active again and ready for content.",
+    });
+  };
 
   useEffect(() => {
     if (bio) {
@@ -117,6 +144,28 @@ const Builder = () => {
       });
     }
   }, [contact]);
+
+  useEffect(() => {
+    setCustomSectionDrafts((current) => {
+      const next: Record<string, CustomSectionDraft> = {};
+
+      customSections.forEach((section) => {
+        next[section.id] = current[section.id] ?? {
+          title: section.title,
+          body: section.body || "",
+        };
+      });
+
+      return next;
+    });
+  }, [customSections]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(customSectionSaveTimeoutsRef.current).forEach((timeout) => clearTimeout(timeout));
+      customSectionSaveTimeoutsRef.current = {};
+    };
+  }, []);
 
   useEffect(() => {
     if (!portfolioLoading && !portfolio && user && !requestedPortfolioId) {
@@ -335,34 +384,18 @@ const Builder = () => {
     }
   };
 
-  const setSectionDeferred = async (section: "experience" | "certifications", deferred: boolean) => {
-    const currentHidden = ((portfolio?.hidden_sections as string[] | null) || []).filter(Boolean);
-    const nextHidden = deferred
-      ? Array.from(new Set([...currentHidden, section]))
-      : currentHidden.filter((entry) => entry !== section);
-
-    await updateSectionControls.mutateAsync({ hidden_sections: nextHidden });
-    toast({
-      title: deferred ? "Section marked as optional for now" : "Section restored",
-      description:
-        deferred
-          ? `We will count ${section} as intentionally omitted until you add it later.`
-          : `${section === "experience" ? "Experience" : "Certifications"} is ready for entries again.`,
-    });
-  };
-
-  const ensureSectionVisible = async (section: "experience" | "certifications") => {
-    const currentHidden = ((portfolio?.hidden_sections as string[] | null) || []).filter(Boolean);
-    if (!currentHidden.includes(section)) return;
+  const ensureSectionApplicable = async (sectionId: string) => {
+    const current = ((portfolio?.not_applicable_sections as string[] | null) || []).filter(Boolean);
+    if (!current.includes(sectionId)) return;
     await updateSectionControls.mutateAsync({
-      hidden_sections: currentHidden.filter((entry) => entry !== section),
+      not_applicable_sections: current.filter((entry) => entry !== sectionId),
     });
   };
 
   const handleAddExperience = async () => {
     if (!expForm.company_name.trim() || !expForm.role_title.trim()) return;
     try {
-      await ensureSectionVisible("experience");
+      await ensureSectionApplicable("experience");
       await addExperience.mutateAsync(expForm);
       setExpForm({ company_name: "", role_title: "", employment_type: "full-time", start_date: "", end_date: "", description: "", is_current: false });
       toast({ title: "Experience added!" });
@@ -384,12 +417,138 @@ const Builder = () => {
   const handleAddCertification = async () => {
     if (!certForm.name.trim()) return;
     try {
-      await ensureSectionVisible("certifications");
+      await ensureSectionApplicable("certifications");
       await addCertification.mutateAsync(certForm);
       setCertForm({ name: "", issuer: "", issue_date: "", expiry_date: "", credential_url: "", description: "" });
       toast({ title: "Certification added!" });
     } catch (error: unknown) {
       toast({ title: "Could not add certification", description: error instanceof Error ? error.message : "Please try again.", variant: "destructive" });
+    }
+  };
+
+  const handleAddCustomSection = async () => {
+    if (!customSectionForm.title.trim()) {
+      toast({ title: "Add a title first", variant: "destructive" });
+      return;
+    }
+    if (customSections.length >= VALIDATION_RULES.CUSTOM_SECTIONS.MAX_COUNT) {
+      toast({ title: `Max ${VALIDATION_RULES.CUSTOM_SECTIONS.MAX_COUNT} custom sections`, variant: "destructive" });
+      return;
+    }
+
+    try {
+      const created = await addCustomSection.mutateAsync(customSectionForm);
+      setCustomSectionForm({ title: "", body: "" });
+      await ensureSectionApplicable(createCustomSectionId(created.id));
+      toast({ title: "Custom section added!" });
+    } catch (error) {
+      toast({ title: "Could not add custom section", description: error instanceof Error ? error.message : "Please try again.", variant: "destructive" });
+    }
+  };
+
+  const setCustomSectionSaving = (sectionId: string, isSaving: boolean) => {
+    setSavingCustomSectionIds((current) => {
+      const next = isSaving
+        ? (current.includes(sectionId) ? current : [...current, sectionId])
+        : current.filter((entry) => entry !== sectionId);
+
+      savingCustomSectionIdsRef.current = next;
+      return next;
+    });
+  };
+
+  const persistCustomSectionDraft = (sectionId: string) => {
+    const draft = pendingCustomSectionDraftsRef.current[sectionId];
+    if (!draft || savingCustomSectionIdsRef.current.includes(sectionId)) return;
+
+    delete pendingCustomSectionDraftsRef.current[sectionId];
+    setCustomSectionSaving(sectionId, true);
+
+    updateCustomSection.mutate(
+      { id: sectionId, ...draft },
+      {
+        onError: (error) => {
+          toast({
+            title: "Could not save custom section",
+            description: error instanceof Error ? error.message : "Please try again.",
+            variant: "destructive",
+          });
+        },
+        onSettled: () => {
+          setCustomSectionSaving(sectionId, false);
+          if (pendingCustomSectionDraftsRef.current[sectionId]) {
+            persistCustomSectionDraft(sectionId);
+          }
+        },
+      }
+    );
+  };
+
+  const queueCustomSectionPersist = (sectionId: string, draft: CustomSectionDraft) => {
+    const existingTimeout = customSectionSaveTimeoutsRef.current[sectionId];
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+    }
+
+    pendingCustomSectionDraftsRef.current[sectionId] = draft;
+    customSectionSaveTimeoutsRef.current[sectionId] = setTimeout(() => {
+      delete customSectionSaveTimeoutsRef.current[sectionId];
+      persistCustomSectionDraft(sectionId);
+    }, 500);
+  };
+
+  const updateCustomSectionDraft = (sectionId: string, draft: CustomSectionDraft) => {
+    setCustomSectionDrafts((current) => ({
+      ...current,
+      [sectionId]: draft,
+    }));
+    queueCustomSectionPersist(sectionId, draft);
+  };
+
+  const handleDeleteCustomSection = async (sectionId: string) => {
+    const customSectionId = createCustomSectionId(sectionId);
+    const saveTimeout = customSectionSaveTimeoutsRef.current[sectionId];
+    if (saveTimeout) {
+      clearTimeout(saveTimeout);
+      delete customSectionSaveTimeoutsRef.current[sectionId];
+    }
+    delete pendingCustomSectionDraftsRef.current[sectionId];
+    setCustomSectionSaving(sectionId, false);
+
+    try {
+      await deleteCustomSection.mutateAsync(sectionId);
+      setCustomSectionDrafts((current) => {
+        const next = { ...current };
+        delete next[sectionId];
+        return next;
+      });
+
+      if (portfolio) {
+        const nextControls: {
+          section_order?: string[];
+          hidden_sections?: string[];
+          not_applicable_sections?: string[];
+        } = {};
+        const nextSectionOrder = (portfolio.section_order as string[] | null | undefined)?.filter((entry) => entry !== customSectionId);
+        const nextHiddenSections = (portfolio.hidden_sections as string[] | null | undefined)?.filter((entry) => entry !== customSectionId);
+        const nextNotApplicableSections = (portfolio.not_applicable_sections as string[] | null | undefined)?.filter((entry) => entry !== customSectionId);
+
+        if (nextSectionOrder) nextControls.section_order = nextSectionOrder;
+        if (nextHiddenSections) nextControls.hidden_sections = nextHiddenSections;
+        if (nextNotApplicableSections) nextControls.not_applicable_sections = nextNotApplicableSections;
+
+        if (Object.keys(nextControls).length > 0) {
+          await updateSectionControls.mutateAsync(nextControls);
+        }
+      }
+
+      toast({ title: "Custom section deleted" });
+    } catch (error) {
+      toast({
+        title: "Could not delete custom section",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -399,15 +558,16 @@ const Builder = () => {
     if (id === "experience") return experiences.length;
     if (id === "education") return education.length;
     if (id === "certifications") return certifications.length;
+    if (id === "custom") return customSections.length;
     return null;
   };
 
   const sectionFilled = (id: Section): boolean => {
     if (id === "settings") return false;
-    if (id === "bio") return !!(bioForm.first_name || bio?.first_name);
-    if (id === "contact") return !!(contactForm.email || contact?.email);
-    if (id === "experience" && experienceDeferred) return true;
-    if (id === "certifications" && certificationsDeferred) return true;
+    if (id === "bio") return isSectionNotApplicable("bio") || !!(bioForm.first_name || bio?.first_name || bioForm.bio || bio?.bio);
+    if (id === "contact") return isSectionNotApplicable("contact") || !!(contactForm.email || contact?.email);
+    if (id === "custom") return customSections.length > 0;
+    if (isSectionNotApplicable(id)) return true;
     const count = getSectionCount(id);
     return count !== null && count > 0;
   };
@@ -428,6 +588,18 @@ const Builder = () => {
   const progressPct = Math.round((filledCount / progressSections.length) * 100);
   const ActiveIcon = sections.find((s) => s.id === activeSection)?.icon || User;
   const activeLabel = sections.find((s) => s.id === activeSection)?.label || "";
+  const renderNotApplicableControl = (sectionId: string, label: string) => (
+    <div className="flex items-center justify-between rounded-xl border border-border bg-card p-3">
+      <div>
+        <p className="text-sm font-medium">Mark {label} as Not Applicable</p>
+        <p className="text-xs text-muted-foreground">Hide it from preview/public/export while counting it as intentional.</p>
+      </div>
+      <Switch
+        checked={isSectionNotApplicable(sectionId)}
+        onCheckedChange={(checked) => void toggleNotApplicable(sectionId, checked)}
+      />
+    </div>
+  );
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -474,9 +646,7 @@ const Builder = () => {
                 const count = getSectionCount(section.id);
                 const filled = sectionFilled(section.id);
                 const isActive = activeSection === section.id;
-                const deferred =
-                  (section.id === "experience" && experienceDeferred) ||
-                  (section.id === "certifications" && certificationsDeferred);
+                const deferred = section.id !== "settings" && section.id !== "custom" && isSectionNotApplicable(section.id);
                 return (
                   <button
                     key={section.id}
@@ -537,9 +707,7 @@ const Builder = () => {
                     {sections.map((section) => {
                       const filled = sectionFilled(section.id);
                       const isActive = activeSection === section.id;
-                      const deferred =
-                        (section.id === "experience" && experienceDeferred) ||
-                        (section.id === "certifications" && certificationsDeferred);
+                      const deferred = section.id !== "settings" && section.id !== "custom" && isSectionNotApplicable(section.id);
                       return (
                         <button
                           key={section.id}
@@ -586,6 +754,7 @@ const Builder = () => {
               {/* BIO */}
               {activeSection === "bio" && (
                 <div className="space-y-5">
+                  {renderNotApplicableControl("bio", "Bio")}
                   <AvatarUpload
                     currentUrl={bio?.avatar_url}
                     onUpload={(url) => {
@@ -633,6 +802,7 @@ const Builder = () => {
               {/* PROJECTS */}
               {activeSection === "projects" && (
                 <div className="space-y-4">
+                  {renderNotApplicableControl("projects", "Projects")}
                   {projects.map((project) => (
                     <div key={project.id} className="rounded-xl border border-border bg-card p-4">
                       <div className="flex items-start justify-between">
@@ -659,8 +829,8 @@ const Builder = () => {
                         <span className="ml-auto text-xs font-normal text-muted-foreground">{projects.length}/{VALIDATION_RULES.PROJECTS.MAX_COUNT}</span>
                       </h3>
                       <Input placeholder="Project name *" value={projectForm.name} onChange={(e) => setProjectForm({ ...projectForm, name: e.target.value })} maxLength={100} />
-                      <Textarea placeholder="Problem statement" value={projectForm.problem_statement} onChange={(e) => setProjectForm({ ...projectForm, problem_statement: e.target.value })} rows={2} />
-                      <Textarea placeholder="Solution approach" value={projectForm.solution_approach} onChange={(e) => setProjectForm({ ...projectForm, solution_approach: e.target.value })} rows={2} />
+                      <Textarea placeholder="Problem statement" value={projectForm.problem_statement} onChange={(e) => setProjectForm({ ...projectForm, problem_statement: e.target.value.slice(0, VALIDATION_RULES.PROJECTS.DESCRIPTION_MAX) })} rows={2} maxLength={VALIDATION_RULES.PROJECTS.DESCRIPTION_MAX} />
+                      <Textarea placeholder="Solution approach" value={projectForm.solution_approach} onChange={(e) => setProjectForm({ ...projectForm, solution_approach: e.target.value.slice(0, VALIDATION_RULES.PROJECTS.DESCRIPTION_MAX) })} rows={2} maxLength={VALIDATION_RULES.PROJECTS.DESCRIPTION_MAX} />
                       <Input placeholder="Technologies (comma-separated)" value={projectForm.technologies} onChange={(e) => setProjectForm({ ...projectForm, technologies: e.target.value })} />
                       <div className="grid grid-cols-2 gap-2">
                         <Input placeholder="GitHub URL" value={projectForm.github_url} onChange={(e) => setProjectForm({ ...projectForm, github_url: e.target.value })} />
@@ -739,6 +909,7 @@ const Builder = () => {
               {/* SKILLS */}
               {activeSection === "skills" && (
                 <div className="space-y-6">
+                  {renderNotApplicableControl("skills", "Skills")}
                   <div>
                     <div className="mb-2">
                       <h3 className="text-sm font-semibold">Skills</h3>
@@ -782,13 +953,14 @@ const Builder = () => {
               {/* EXPERIENCE */}
               {activeSection === "experience" && (
                 <div className="space-y-4">
-                  {experienceDeferred && experiences.length === 0 && (
+                  {renderNotApplicableControl("experience", "Experience")}
+                  {isSectionNotApplicable("experience") && experiences.length === 0 && (
                     <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
                       <p className="font-medium">Experience is marked as not applicable for now.</p>
                       <p className="mt-1 text-emerald-800">
                         This section still counts toward Builder progress and stays hidden from your portfolio until you add real experience.
                       </p>
-                      <Button className="mt-3" variant="outline" size="sm" onClick={() => setSectionDeferred("experience", false)}>
+                      <Button className="mt-3" variant="outline" size="sm" onClick={() => void toggleNotApplicable("experience", false)}>
                         Add Experience Instead
                       </Button>
                     </div>
@@ -812,14 +984,6 @@ const Builder = () => {
 
                   <div className="rounded-xl border-2 border-dashed border-border bg-muted/30 p-5 space-y-3">
                     <h3 className="text-sm font-semibold flex items-center gap-2"><Plus className="h-4 w-4" /> Add Experience</h3>
-                    {experiences.length === 0 && !experienceDeferred && (
-                      <div className="rounded-lg border border-border/80 bg-background p-3 text-xs text-muted-foreground">
-                        <p>New students and early-career users may not have formal experience yet.</p>
-                        <Button className="mt-2" variant="outline" size="sm" onClick={() => setSectionDeferred("experience", true)}>
-                          Mark as Not Applicable for Now
-                        </Button>
-                      </div>
-                    )}
                     <div className="grid grid-cols-2 gap-2">
                       <Input placeholder="Company name *" value={expForm.company_name} onChange={(e) => setExpForm({ ...expForm, company_name: e.target.value })} maxLength={100} />
                       <Input placeholder="Role title *" value={expForm.role_title} onChange={(e) => setExpForm({ ...expForm, role_title: e.target.value })} maxLength={100} />
@@ -846,7 +1010,7 @@ const Builder = () => {
                       <input type="checkbox" checked={expForm.is_current} onChange={(e) => setExpForm({ ...expForm, is_current: e.target.checked, end_date: "" })} className="rounded border-border" />
                       Currently working here
                     </label>
-                    <Textarea placeholder="Description" value={expForm.description} onChange={(e) => setExpForm({ ...expForm, description: e.target.value })} rows={2} />
+                    <Textarea placeholder="Description" value={expForm.description} onChange={(e) => setExpForm({ ...expForm, description: e.target.value.slice(0, VALIDATION_RULES.SECTION_TEXT_MAX) })} rows={2} maxLength={VALIDATION_RULES.SECTION_TEXT_MAX} />
                     <Button onClick={handleAddExperience} disabled={addExperience.isPending} size="sm" variant="hero">
                       <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Experience
                     </Button>
@@ -854,7 +1018,7 @@ const Builder = () => {
 
                   <LinkedInImport
                     onImportExperiences={async (exps) => {
-                      await ensureSectionVisible("experience");
+                      await ensureSectionApplicable("experience");
                       for (const exp of exps) {
                         await addExperience.mutateAsync({
                           company_name: exp.company_name,
@@ -888,7 +1052,7 @@ const Builder = () => {
                       }
                     }}
                     onImportCertifications={async (entries) => {
-                      await ensureSectionVisible("certifications");
+                      await ensureSectionApplicable("certifications");
                       for (const entry of entries) {
                         await addCertification.mutateAsync({
                           name: entry.name,
@@ -931,6 +1095,7 @@ const Builder = () => {
               {/* EDUCATION */}
               {activeSection === "education" && (
                 <div className="space-y-4">
+                  {renderNotApplicableControl("education", "Education")}
                   {education.map((edu) => (
                     <div key={edu.id} className="rounded-xl border border-border bg-card p-4">
                       <div className="flex items-start justify-between">
@@ -958,7 +1123,7 @@ const Builder = () => {
                       <Input placeholder="Graduation year" value={eduForm.graduation_year} onChange={(e) => setEduForm({ ...eduForm, graduation_year: e.target.value })} maxLength={4} />
                       <Input placeholder="CGPA" value={eduForm.cgpa} onChange={(e) => setEduForm({ ...eduForm, cgpa: e.target.value })} maxLength={5} />
                     </div>
-                    <Textarea placeholder="Description" value={eduForm.description} onChange={(e) => setEduForm({ ...eduForm, description: e.target.value })} rows={2} />
+                    <Textarea placeholder="Description" value={eduForm.description} onChange={(e) => setEduForm({ ...eduForm, description: e.target.value.slice(0, VALIDATION_RULES.SECTION_TEXT_MAX) })} rows={2} maxLength={VALIDATION_RULES.SECTION_TEXT_MAX} />
                     <Button onClick={handleAddEducation} disabled={addEducation.isPending} size="sm" variant="hero">
                       <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Education
                     </Button>
@@ -969,13 +1134,14 @@ const Builder = () => {
               {/* CERTIFICATIONS */}
               {activeSection === "certifications" && (
                 <div className="space-y-4">
-                  {certificationsDeferred && certifications.length === 0 && (
+                  {renderNotApplicableControl("certifications", "Certifications")}
+                  {isSectionNotApplicable("certifications") && certifications.length === 0 && (
                     <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
                       <p className="font-medium">Certifications are marked as not applicable for now.</p>
                       <p className="mt-1 text-emerald-800">
                         This section still counts toward Builder progress and stays hidden from your portfolio until you add credentials later.
                       </p>
-                      <Button className="mt-3" variant="outline" size="sm" onClick={() => setSectionDeferred("certifications", false)}>
+                      <Button className="mt-3" variant="outline" size="sm" onClick={() => void toggleNotApplicable("certifications", false)}>
                         Add Certifications Instead
                       </Button>
                     </div>
@@ -1006,14 +1172,6 @@ const Builder = () => {
 
                   <div className="rounded-xl border-2 border-dashed border-border bg-muted/30 p-5 space-y-3">
                     <h3 className="text-sm font-semibold flex items-center gap-2"><Plus className="h-4 w-4" /> Add Certification</h3>
-                    {certifications.length === 0 && !certificationsDeferred && (
-                      <div className="rounded-lg border border-border/80 bg-background p-3 text-xs text-muted-foreground">
-                        <p>If you do not hold certifications yet, you can intentionally leave this section out for now.</p>
-                        <Button className="mt-2" variant="outline" size="sm" onClick={() => setSectionDeferred("certifications", true)}>
-                          Mark as Not Applicable for Now
-                        </Button>
-                      </div>
-                    )}
                     <Input placeholder="Certification name *" value={certForm.name} onChange={(e) => setCertForm({ ...certForm, name: e.target.value })} maxLength={150} />
                     <Input placeholder="Issuer (e.g. Infosys, TCS, Google)" value={certForm.issuer} onChange={(e) => setCertForm({ ...certForm, issuer: e.target.value })} maxLength={100} />
                     <div className="grid grid-cols-2 gap-2">
@@ -1027,7 +1185,7 @@ const Builder = () => {
                       </div>
                     </div>
                     <Input placeholder="Credential URL" value={certForm.credential_url} onChange={(e) => setCertForm({ ...certForm, credential_url: e.target.value })} />
-                    <Textarea placeholder="Description" value={certForm.description} onChange={(e) => setCertForm({ ...certForm, description: e.target.value })} rows={2} />
+                    <Textarea placeholder="Description" value={certForm.description} onChange={(e) => setCertForm({ ...certForm, description: e.target.value.slice(0, VALIDATION_RULES.SECTION_TEXT_MAX) })} rows={2} maxLength={VALIDATION_RULES.SECTION_TEXT_MAX} />
                     <Button onClick={handleAddCertification} disabled={addCertification.isPending} size="sm" variant="hero">
                       <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Certification
                     </Button>
@@ -1035,9 +1193,77 @@ const Builder = () => {
                 </div>
               )}
 
+              {/* CUSTOM */}
+              {activeSection === "custom" && (
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-border bg-card p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h3 className="font-semibold">Custom Sections</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">Add up to {VALIDATION_RULES.CUSTOM_SECTIONS.MAX_COUNT} extra title + body sections. You can place them above Contact from Preview layout mode.</p>
+                      </div>
+                      <Badge variant="secondary">{customSections.length}/{VALIDATION_RULES.CUSTOM_SECTIONS.MAX_COUNT}</Badge>
+                    </div>
+                  </div>
+
+                  {customSections.map((section) => {
+                    const sectionId = createCustomSectionId(section.id);
+                    const draft = customSectionDrafts[section.id] ?? { title: section.title, body: section.body || "" };
+                    const isSaving = savingCustomSectionIds.includes(section.id);
+                    return (
+                      <div key={section.id} className="rounded-xl border border-border bg-card p-4 space-y-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <Input
+                              value={draft.title}
+                              onChange={(e) => updateCustomSectionDraft(section.id, { title: e.target.value, body: draft.body })}
+                              maxLength={VALIDATION_RULES.CUSTOM_SECTIONS.TITLE_MAX}
+                            />
+                            <Textarea
+                              className="mt-3"
+                              value={draft.body}
+                              onChange={(e) => updateCustomSectionDraft(section.id, {
+                                title: draft.title,
+                                body: e.target.value.slice(0, VALIDATION_RULES.CUSTOM_SECTIONS.BODY_MAX),
+                              })}
+                              maxLength={VALIDATION_RULES.CUSTOM_SECTIONS.BODY_MAX}
+                              rows={4}
+                            />
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              {isSaving ? "Saving changes..." : `${draft.body.length}/${VALIDATION_RULES.CUSTOM_SECTIONS.BODY_MAX} characters`}
+                            </p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="shrink-0 text-muted-foreground hover:text-destructive"
+                            onClick={() => void handleDeleteCustomSection(section.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        {renderNotApplicableControl(sectionId, draft.title || "this custom section")}
+                      </div>
+                    );
+                  })}
+
+                  {customSections.length < VALIDATION_RULES.CUSTOM_SECTIONS.MAX_COUNT && (
+                    <div className="rounded-xl border-2 border-dashed border-border bg-muted/30 p-5 space-y-3">
+                      <h3 className="text-sm font-semibold flex items-center gap-2"><Plus className="h-4 w-4" /> Add Custom Section</h3>
+                      <Input placeholder="Section title *" value={customSectionForm.title} onChange={(e) => setCustomSectionForm({ ...customSectionForm, title: e.target.value.slice(0, VALIDATION_RULES.CUSTOM_SECTIONS.TITLE_MAX) })} maxLength={VALIDATION_RULES.CUSTOM_SECTIONS.TITLE_MAX} />
+                      <Textarea placeholder="Section body" value={customSectionForm.body} onChange={(e) => setCustomSectionForm({ ...customSectionForm, body: e.target.value.slice(0, VALIDATION_RULES.CUSTOM_SECTIONS.BODY_MAX) })} rows={4} maxLength={VALIDATION_RULES.CUSTOM_SECTIONS.BODY_MAX} />
+                      <Button onClick={handleAddCustomSection} disabled={addCustomSection.isPending} size="sm" variant="hero">
+                        <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Custom Section
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* CONTACT */}
               {activeSection === "contact" && (
                 <div className="space-y-4">
+                  {renderNotApplicableControl("contact", "Contact")}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Email</Label>

@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export const fetchPortfolioContent = async (portfolioId: string) => {
-  const [bioRes, projectsRes, skillsRes, expRes, eduRes, contactRes, certRes] = await Promise.all([
+  const [bioRes, projectsRes, skillsRes, expRes, eduRes, contactRes, certRes, customRes] = await Promise.all([
     supabase.from("bio_sections").select("*").eq("portfolio_id", portfolioId).maybeSingle(),
     supabase.from("portfolio_projects").select("*").eq("portfolio_id", portfolioId).order("display_order"),
     supabase.from("skills").select("*").eq("portfolio_id", portfolioId).order("display_order"),
@@ -9,6 +9,7 @@ export const fetchPortfolioContent = async (portfolioId: string) => {
     supabase.from("education").select("*").eq("portfolio_id", portfolioId).order("display_order"),
     supabase.from("contact_info").select("*").eq("portfolio_id", portfolioId).maybeSingle(),
     supabase.from("certifications" as any).select("*").eq("portfolio_id", portfolioId).order("display_order"),
+    supabase.from("custom_sections" as any).select("*").eq("portfolio_id", portfolioId).order("display_order"),
   ]);
 
   return {
@@ -25,5 +26,6 @@ export const fetchPortfolioContent = async (portfolioId: string) => {
     education: eduRes.data || [],
     contact: contactRes.data,
     certifications: (certRes.data as any[]) || [],
+    customSections: (customRes.data as any[]) || [],
   };
 };

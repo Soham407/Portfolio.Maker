@@ -4,6 +4,7 @@ import type { PortfolioData } from "./PortfolioTemplateProps";
 import SectionWrapper from "@/components/preview/SectionWrapper";
 import { getRenderableSectionIds } from "@/lib/portfolioSections";
 import { getEffectiveLayout } from "@/lib/sectionLayouts";
+import { buildCustomSectionMap, getCustomSectionAvailability, renderSimpleCustomSection } from "@/lib/templateSectionHelpers";
 
 const fadeBlur: any = {
   hidden: { opacity: 0, filter: "blur(8px)", y: 20 },
@@ -28,9 +29,11 @@ export default function GlassTemplate({
   education,
   contact,
   certifications,
+  customSections,
   sectionLayouts,
   sectionOrder,
   hiddenSections,
+  notApplicableSections,
   editMode,
   onSectionEdit,
 }: PortfolioData) {
@@ -51,7 +54,21 @@ export default function GlassTemplate({
     education: education.length > 0,
     certifications: certifications.length > 0,
     contact: hasContactLinks,
-  });
+    ...getCustomSectionAvailability(customSections),
+  }, notApplicableSections);
+
+  const customSectionMap = buildCustomSectionMap(customSections, (section) =>
+    renderSimpleCustomSection(
+      section,
+      `custom:${section.id}`,
+      editMode,
+      onSectionEdit,
+      "rounded-3xl p-8",
+      "mb-4 text-2xl font-bold text-white",
+      "text-sm leading-7 text-white/70",
+      { background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }
+    )
+  );
 
   const socialPills = (
     <>
@@ -84,6 +101,7 @@ export default function GlassTemplate({
   );
 
   const sectionContent: Record<string, JSX.Element> = {
+    ...customSectionMap,
     bio: (
       <SectionWrapper key="bio" id="bio" editMode={editMode} onEdit={onSectionEdit}>
         <section id="bio" className="relative overflow-hidden px-6 py-24 text-white">

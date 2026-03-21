@@ -64,6 +64,13 @@ export interface CertificationProp {
   credential_url?: string | null;
 }
 
+export interface CustomSectionProp {
+  id: string;
+  title: string;
+  body: string;
+  display_order?: number | null;
+}
+
 export interface PortfolioData {
   bio: BioProp | null;
   projects: ProjectProp[];
@@ -72,9 +79,11 @@ export interface PortfolioData {
   education: EducationProp[];
   contact: ContactProp | null;
   certifications: CertificationProp[];
+  customSections?: CustomSectionProp[];
   sectionLayouts?: Record<string, string>;
   sectionOrder?: string[];
   hiddenSections?: string[];
+  notApplicableSections?: string[];
   editMode?: boolean;
   onSectionEdit?: (section: string) => void;
 }

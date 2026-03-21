@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Sparkles, Github, Layout, Eye, BarChart3, Shield } from "lucide-react";
+import { Sparkles, Github, Layout, Eye, Users, Shield } from "lucide-react";
 
 const features = [
   {
@@ -31,9 +31,9 @@ const features = [
     accent: "group-hover:border-emerald-200",
   },
   {
-    icon: BarChart3,
-    title: "Analytics Dashboard",
-    description: "Track who views your portfolio and measure your engagement metrics.",
+    icon: Users,
+    title: "Profile Views",
+    description: "See how many people are checking out your public portfolio.",
     color: "text-orange-600 bg-orange-500/10 group-hover:bg-orange-500 group-hover:text-white",
     accent: "group-hover:border-orange-200",
   },
@@ -50,18 +50,12 @@ const Features = () => {
   return (
     <section id="features" className="py-24">
       <div className="container">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="mb-16 text-center"
-        >
+        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="mb-16 text-center">
           <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
             FEATURES
           </div>
           <h2 className="mb-4 text-3xl font-bold tracking-tight md:text-4xl">
-            Everything You Need to{" "}
-            <span className="text-gradient">Stand Out</span>
+            Everything You Need to <span className="text-gradient">Stand Out</span>
           </h2>
           <p className="mx-auto max-w-lg text-muted-foreground">
             Powerful features designed to help you build a portfolio that gets you hired.

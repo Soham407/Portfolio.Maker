@@ -3,8 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
-  Briefcase, PenTool, Eye, Layout, BarChart3, Share2, Plus, Settings, LogOut,
-  Copy, Trash2, Star, MoreVertical, Globe, Lock, ChevronRight, TrendingUp, Users, Zap,
+  Briefcase, PenTool, Eye, Layout, Share2, Plus, Settings, LogOut,
+  Copy, Trash2, Star, MoreVertical, Globe, Lock, TrendingUp, Users, Zap,
   Twitter, Linkedin, CheckCheck
 } from "lucide-react";
 import { motion } from "framer-motion";
@@ -67,7 +67,7 @@ const Dashboard = () => {
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
-  const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
+  const [sharePortfolioId, setSharePortfolioId] = useState<string | undefined>(undefined);
   const [newName, setNewName] = useState("New Portfolio");
   const [newType, setNewType] = useState("general");
   const [copied, setCopied] = useState(false);
@@ -165,6 +165,8 @@ const Dashboard = () => {
   });
 
   const selectedPortfolio = allPortfolios.find((item) => item.id === portfolioId) ?? portfolio;
+  const sharePortfolio = allPortfolios.find((item) => item.id === sharePortfolioId)
+    ?? (portfolio?.id === sharePortfolioId ? portfolio : undefined);
   const builderHref = portfolioId ? `/builder?portfolio=${portfolioId}` : "/builder";
   const previewHref = portfolioId ? `/preview?portfolio=${portfolioId}` : "/preview";
   const templatesHref = portfolioId ? `/templates?portfolio=${portfolioId}` : "/templates";
@@ -242,20 +244,14 @@ const Dashboard = () => {
     );
   };
 
-  const handleCopyLink = async () => {
-    const url = portfolio?.visibility === "unlisted"
-      ? `${window.location.origin}/share/${portfolio.share_token}`
-      : `${window.location.origin}/p/${profile?.username}${portfolio?.share_token ? `/${portfolio.share_token}` : ""}`;
+  const handleCopyLink = async (url: string) => {
     await navigator.clipboard.writeText(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
     toast({ title: "Link copied!" });
   };
 
-  const handleNativeShare = async () => {
-    const url = portfolio?.visibility === "unlisted"
-      ? `${window.location.origin}/share/${portfolio.share_token}`
-      : `${window.location.origin}/p/${profile?.username}${portfolio?.share_token ? `/${portfolio.share_token}` : ""}`;
+  const handleNativeShare = async (url: string) => {
     await navigator.share({ title: "My Professional Portfolio", url });
   };
 
@@ -310,6 +306,13 @@ const Dashboard = () => {
   const shareUrl = portfolio?.visibility === "unlisted"
     ? `${window.location.origin}/share/${portfolio?.share_token}`
     : publicUrl;
+  const shareTargetPublicUrl = sharePortfolio
+    ? `${window.location.origin}/p/${profile?.username}${sharePortfolio.share_token ? `/${sharePortfolio.share_token}` : ""}`
+    : "";
+  const shareTargetUrl = sharePortfolio?.visibility === "unlisted"
+    ? `${window.location.origin}/share/${sharePortfolio.share_token}`
+    : shareTargetPublicUrl;
+  const shareTargetBuilderHref = sharePortfolioId ? `/builder?portfolio=${sharePortfolioId}` : builderHref;
 
   const relativeTime = (iso: string) => {
     const diff = Date.now() - new Date(iso).getTime();
@@ -320,12 +323,6 @@ const Dashboard = () => {
     if (hrs < 24) return `${hrs}h ago`;
     return `${Math.floor(hrs / 24)}d ago`;
   };
-
-  const quickActions = [
-    { icon: PenTool, label: "Edit Portfolio", description: "Continue building", onClick: () => navigate(builderHref), color: "text-primary bg-primary/10", hoverBorder: "hover:border-primary/30", disabled: !portfolioId },
-    { icon: Layout, label: "Templates", description: "Change template", onClick: () => navigate(templatesHref), color: "text-violet-600 bg-violet-500/10", hoverBorder: "hover:border-violet-200", disabled: !portfolioId },
-    { icon: BarChart3, label: "Analytics", description: "View insights", onClick: () => setIsAnalyticsOpen(true), color: "text-orange-600 bg-orange-500/10", hoverBorder: "hover:border-orange-200", disabled: !portfolioId },
-  ];
 
   return (
     <div className="min-h-screen bg-background">
@@ -475,10 +472,7 @@ const Dashboard = () => {
             ))}
           </div>
 
-          {/* Two-column layout: Portfolios + Quick Actions */}
-          <div className="grid gap-6 lg:grid-cols-3">
-            {/* Portfolios — 2 cols */}
-            <div className="lg:col-span-2">
+          <div>
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="font-semibold">Your Portfolios</h2>
                 <Badge variant="secondary" className="text-xs">{allPortfolios.length} total</Badge>
@@ -532,6 +526,27 @@ const Dashboard = () => {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => navigate(`/builder?portfolio=${p.id}`)}>
+                            <PenTool className="mr-2 h-3.5 w-3.5" /> Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => navigate(`/preview?portfolio=${p.id}`)}>
+                            <Eye className="mr-2 h-3.5 w-3.5" /> Preview
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => navigate(`/templates?portfolio=${p.id}`)}>
+                            <Layout className="mr-2 h-3.5 w-3.5" /> Templates
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setSharePortfolioId(p.id);
+                              setIsShareOpen(true);
+                            }}
+                          >
+                            <Share2 className="mr-2 h-3.5 w-3.5" /> Share
+                          </DropdownMenuItem>
+                          <DropdownMenuItem disabled>
+                            <Users className="mr-2 h-3.5 w-3.5" /> Profile Views: {p.id === portfolioId ? (viewCount ?? 0) : "Select to view"}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={() => handleDuplicate(p.id)}>
                             <Copy className="mr-2 h-3.5 w-3.5" /> Duplicate
                           </DropdownMenuItem>
@@ -580,39 +595,6 @@ const Dashboard = () => {
                   </div>
                 ))}
               </div>
-            </div>
-
-            {/* Quick Actions — 1 col */}
-            <div>
-              <h2 className="mb-4 font-semibold">Quick Actions</h2>
-              {selectedPortfolio && (
-                <div className="mb-3 rounded-xl border border-border bg-card p-3">
-                  <p className="text-xs text-muted-foreground">Selected portfolio</p>
-                  <p className="mt-1 text-sm font-medium text-foreground">{selectedPortfolio.name || "Untitled"}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Quick actions below will apply only to this portfolio.</p>
-                </div>
-              )}
-              <div className="space-y-2">
-                {quickActions.map((action) => (
-                  <button
-                    key={action.label}
-                    type="button"
-                    onClick={action.onClick}
-                    disabled={action.disabled}
-                    className={`flex w-full items-center gap-3 rounded-xl border border-border bg-card p-3.5 text-left shadow-card transition-all duration-200 ${action.hoverBorder} hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50`}
-                  >
-                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${action.color}`}>
-                      <action.icon className="h-4 w-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">{action.label}</p>
-                      <p className="text-xs text-muted-foreground">{action.description}</p>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
-                  </button>
-                ))}
-              </div>
-            </div>
           </div>
 
           {/* Share Banner */}
@@ -636,7 +618,10 @@ const Dashboard = () => {
                   variant="hero"
                   size="sm"
                   disabled={portfolio?.visibility === "public" ? !profile?.username : !portfolio?.share_token}
-                  onClick={() => setIsShareOpen(true)}
+                  onClick={() => {
+                    setSharePortfolioId(portfolioId);
+                    setIsShareOpen(true);
+                  }}
                 >
                   Share Portfolio
                 </Button>
@@ -648,24 +633,36 @@ const Dashboard = () => {
       </main>
 
       {/* Share Modal */}
-      <Dialog open={isShareOpen} onOpenChange={setIsShareOpen}>
+      <Dialog
+        open={isShareOpen}
+        onOpenChange={(open) => {
+          setIsShareOpen(open);
+          if (!open) {
+            setCopied(false);
+            setSharePortfolioId(undefined);
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Share Portfolio</DialogTitle>
             <DialogDescription>
-              {!profile?.username
+              {!profile?.username && sharePortfolio?.visibility === "public"
                 ? "Set a username first to get your public URL."
-                : portfolio?.visibility === "private"
+                : sharePortfolio?.visibility === "private"
                 ? "Change visibility to public or unlisted before sharing."
-                : portfolio?.visibility === "unlisted"
+                : sharePortfolio?.visibility === "unlisted"
                 ? "Share your secret link with selected people."
                 : "Share your public portfolio with the world."}
             </DialogDescription>
           </DialogHeader>
-          {(!profile?.username && portfolio?.visibility === "public") || portfolio?.visibility === "private" ? (
+          {(!profile?.username && sharePortfolio?.visibility === "public") || sharePortfolio?.visibility === "private" ? (
             <div className="py-2">
               <Button variant="hero" asChild className="w-full">
-                <Link to={`${builderHref}${builderHref.includes("?") ? "&" : "?"}section=settings`} onClick={() => setIsShareOpen(false)}>
+                <Link
+                  to={`${shareTargetBuilderHref}${shareTargetBuilderHref.includes("?") ? "&" : "?"}section=settings`}
+                  onClick={() => setIsShareOpen(false)}
+                >
                   <Settings className="mr-2 h-4 w-4" />
                   {!profile?.username ? "Set Username in Settings" : "Update Visibility in Settings"}
                 </Link>
@@ -674,17 +671,17 @@ const Dashboard = () => {
           ) : (
             <div className="space-y-4 py-2">
               <div className="space-y-2">
-                <Label>{portfolio?.visibility === "unlisted" ? "Your secret share URL" : "Your public URL"}</Label>
+                <Label>{sharePortfolio?.visibility === "unlisted" ? "Your secret share URL" : "Your public URL"}</Label>
                 <div className="flex gap-2">
-                  <Input value={shareUrl} readOnly className="flex-1 text-sm" />
-                  <Button size="sm" variant="outline" onClick={handleCopyLink}>
+                  <Input value={shareTargetUrl} readOnly className="flex-1 text-sm" />
+                  <Button size="sm" variant="outline" onClick={() => void handleCopyLink(shareTargetUrl)} disabled={!shareTargetUrl}>
                     {copied ? <CheckCheck className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
                   </Button>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 {typeof navigator.share !== "undefined" && (
-                  <Button variant="outline" size="sm" className="flex-1" onClick={handleNativeShare}>
+                  <Button variant="outline" size="sm" className="flex-1" onClick={() => void handleNativeShare(shareTargetUrl)} disabled={!shareTargetUrl}>
                     <Share2 className="mr-1.5 h-3.5 w-3.5" /> Share
                   </Button>
                 )}
@@ -695,7 +692,7 @@ const Dashboard = () => {
                   asChild
                 >
                   <a
-                    href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent("Check out my portfolio!")}`}
+                    href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(shareTargetUrl)}&text=${encodeURIComponent("Check out my portfolio!")}`}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
@@ -709,7 +706,7 @@ const Dashboard = () => {
                   asChild
                 >
                   <a
-                    href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`}
+                    href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareTargetUrl)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
@@ -722,65 +719,6 @@ const Dashboard = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isAnalyticsOpen} onOpenChange={setIsAnalyticsOpen}>
-        <DialogContent className="sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Portfolio Analytics</DialogTitle>
-            <DialogDescription>
-              {selectedPortfolio?.name ? `Insights for ${selectedPortfolio.name}` : "Insights for the selected portfolio"}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-6">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <div className="rounded-xl border border-border bg-card p-5 shadow-card">
-                <p className="text-sm text-muted-foreground">Total Views</p>
-                <p className="mt-1 text-3xl font-bold">{viewCount ?? 0}</p>
-              </div>
-              <div className="rounded-xl border border-border bg-card p-5 shadow-card">
-                <p className="text-sm text-muted-foreground">Last 7 Days</p>
-                <p className="mt-1 text-3xl font-bold">{weekViewCount ?? 0}</p>
-              </div>
-              <div className="rounded-xl border border-border bg-card p-5 shadow-card">
-                <p className="text-sm text-muted-foreground">Recent Visitors</p>
-                <div className="mt-2 space-y-1.5">
-                  {(recentViews || []).length === 0 ? (
-                    <p className="text-xs text-muted-foreground italic">No views yet</p>
-                  ) : (
-                    recentViews!.map((v, i) => (
-                      <div key={i} className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">Visitor</span>
-                        <span className="text-muted-foreground">{relativeTime(v.created_at)}</span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-border bg-card p-5 shadow-card">
-              <p className="mb-4 text-sm font-medium">Views - Last 7 Days</p>
-              {(dailyViews || []).length > 0 ? (
-                <ResponsiveContainer width="100%" height={180}>
-                  <BarChart data={dailyViews} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                    <XAxis dataKey="date" tick={{ fontSize: 11 }} className="text-muted-foreground" />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                    <Tooltip
-                      contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }}
-                      labelStyle={{ fontWeight: 600 }}
-                    />
-                    <Bar dataKey="views" radius={[4, 4, 0, 0]} className="fill-primary" fill="hsl(var(--primary))" />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex h-[180px] items-center justify-center">
-                  <p className="text-sm text-muted-foreground">No view data yet</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

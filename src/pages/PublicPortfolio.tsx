@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getTemplateComponent } from "@/components/templates";
 import { fetchPortfolioContent } from "@/lib/publicPortfolio";
+import { createCustomSectionId } from "@/lib/portfolioSections";
 
 const PublicPortfolio = () => {
   const { username, token } = useParams<{ username: string; token?: string }>();
@@ -114,6 +115,10 @@ const PublicPortfolio = () => {
   }
 
   const TemplateComponent = getTemplateComponent(data.portfolio.template_id);
+  const sectionOrder = [
+    ...(data.portfolio.section_order ?? []),
+    ...(data.customSections ?? []).map((section: { id: string }) => createCustomSectionId(section.id)),
+  ];
 
   return (
     <TemplateComponent
@@ -124,9 +129,11 @@ const PublicPortfolio = () => {
       education={data.education}
       contact={data.contact}
       certifications={data.certifications}
+      customSections={data.customSections}
       sectionLayouts={(data.portfolio.section_layouts as Record<string, string>) ?? undefined}
-      sectionOrder={data.portfolio.section_order ?? undefined}
+      sectionOrder={sectionOrder}
       hiddenSections={data.portfolio.hidden_sections ?? undefined}
+      notApplicableSections={data.portfolio.not_applicable_sections ?? undefined}
     />
   );
 };

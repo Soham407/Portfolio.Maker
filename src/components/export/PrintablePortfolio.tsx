@@ -1,12 +1,13 @@
 import type { PortfolioData } from "@/components/templates";
 import { PORTFOLIO_SECTIONS } from "@/lib/constants";
-import { normalizeHiddenSections, normalizeSectionOrder } from "@/lib/portfolioSections";
+import { normalizeHiddenSections, normalizeSectionOrder, createCustomSectionId } from "@/lib/portfolioSections";
 
 type PrintablePortfolioProps = PortfolioData & {
   name?: string | null;
   mode: "portfolio" | "resume";
   sectionOrder?: string[] | null;
   hiddenSections?: string[] | null;
+  notApplicableSections?: string[] | null;
 };
 
 const hasSectionContent = (sectionId: string, data: PrintablePortfolioProps) => {
@@ -17,15 +18,18 @@ const hasSectionContent = (sectionId: string, data: PrintablePortfolioProps) => 
   if (sectionId === "education") return data.education.length > 0;
   if (sectionId === "certifications") return data.certifications.length > 0;
   if (sectionId === "contact") return !!(data.contact?.email || data.contact?.phone || data.contact?.linkedin_url || data.contact?.github_url || data.contact?.website_url);
+  if (sectionId.startsWith("custom:")) return Boolean(data.customSections?.some((section) => createCustomSectionId(section.id) === sectionId && (section.title || section.body)));
   return false;
 };
 
 const sectionTitleMap = Object.fromEntries(PORTFOLIO_SECTIONS.map((section) => [section.id, section.label]));
 
 export default function PrintablePortfolio(props: PrintablePortfolioProps) {
-  const order = normalizeSectionOrder(props.sectionOrder);
+  const customOrder = (props.customSections || []).map((section) => createCustomSectionId(section.id));
+  const order = normalizeSectionOrder([...(props.sectionOrder || []), ...customOrder]);
   const hiddenSections = normalizeHiddenSections(props.hiddenSections);
-  const visibleSections = order.filter((sectionId) => !hiddenSections.includes(sectionId) && hasSectionContent(sectionId, props));
+  const notApplicableSections = new Set(props.notApplicableSections || []);
+  const visibleSections = order.filter((sectionId) => !hiddenSections.includes(sectionId) && !notApplicableSections.has(sectionId) && hasSectionContent(sectionId, props));
   const fullName = [props.bio?.first_name, props.bio?.last_name].filter(Boolean).join(" ").trim() || props.name || "Portfolio";
   const compact = props.mode === "resume";
 
@@ -53,8 +57,19 @@ export default function PrintablePortfolio(props: PrintablePortfolioProps) {
         {visibleSections.map((sectionId) => (
           <section key={sectionId}>
             <h2 className="mb-4 border-b border-slate-200 pb-2 text-sm font-semibold uppercase tracking-[0.25em] text-slate-500">
-              {sectionTitleMap[sectionId]}
+              {sectionTitleMap[sectionId] ?? "Custom Section"}
             </h2>
+
+            {sectionId.startsWith("custom:") && (
+              <div className="space-y-2">
+                {props.customSections?.filter((section) => createCustomSectionId(section.id) === sectionId).map((section) => (
+                  <article key={section.id}>
+                    <h3 className="font-medium">{section.title}</h3>
+                    {section.body && <p className="mt-2 text-sm leading-7 text-slate-700">{section.body}</p>}
+                  </article>
+                ))}
+              </div>
+            )}
 
             {sectionId === "bio" && props.bio && (
               <div className="grid gap-4 md:grid-cols-[1fr_auto]">
