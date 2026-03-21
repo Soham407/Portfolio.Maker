@@ -24,6 +24,10 @@ export default function SectionWrapper({ id, editMode, onEdit, children }: Secti
       ref={ref}
       layout
       data-preview-section-id={id}
+      onContextMenu={(event) => {
+        if (!canReorder) return;
+        event.preventDefault();
+      }}
       onPointerDown={(event) => {
         if (!canReorder || !previewLayout) return;
         event.preventDefault();
@@ -50,16 +54,18 @@ export default function SectionWrapper({ id, editMode, onEdit, children }: Secti
       }}
       transition={{ layout: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } }}
       animate={{
-        scale: isDragging ? 0.97 : 1,
+        scale: isDragging ? 0.94 : 1,
       }}
       className={`group relative ${
         editMode ? "rounded-2xl border-2 border-dashed border-red-400/70 bg-red-50/20" : ""
       } ${
-        isDragging ? "z-20 border-solid border-primary bg-primary/10 shadow-2xl" : ""
+        isDragging ? "z-20 border-solid border-primary bg-primary/10 shadow-2xl ring-4 ring-primary/20" : ""
       } ${
         isDropTarget ? "border-primary/80 bg-primary/5" : ""
       } ${
-        canReorder ? "cursor-grab select-none" : ""
+        canReorder ? "cursor-grab touch-none select-none" : ""
+      } ${
+        isDragging ? "cursor-grabbing" : ""
       }`}
     >
       {editMode && onEdit && (

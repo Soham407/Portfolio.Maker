@@ -31,8 +31,8 @@ const TEMPLATE_NAMES: Record<string, string> = {
   photography: "Brutalist",
 };
 
-const LONG_PRESS_DELAY_MS = 350;
-const PRESS_MOVE_CANCEL_THRESHOLD_PX = 10;
+const LONG_PRESS_DELAY_MS = 800;
+const PRESS_MOVE_CANCEL_THRESHOLD_PX = 24;
 
 const areSectionListsEqual = (left: string[], right: string[]) => (
   left.length === right.length && left.every((entry, index) => entry === right[index])
