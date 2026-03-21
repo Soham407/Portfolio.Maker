@@ -3,9 +3,10 @@ import { useRef } from "react";
 import { Github, Linkedin, Twitter, Globe, Mail, Phone, ExternalLink, Award } from "lucide-react";
 import type { PortfolioData } from "./PortfolioTemplateProps";
 import SectionWrapper from "@/components/preview/SectionWrapper";
+import { getPortfolioSectionAvailability, hasContactContent } from "@/lib/portfolioSectionAvailability";
 import { getRenderableSectionIds } from "@/lib/portfolioSections";
 import { getEffectiveLayout } from "@/lib/sectionLayouts";
-import { buildCustomSectionMap, getCustomSectionAvailability, renderSimpleCustomSection } from "@/lib/templateSectionHelpers";
+import { buildCustomSectionMap, renderSimpleCustomSection } from "@/lib/templateSectionHelpers";
 
 function RevealText({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) {
   const ref = useRef(null);
@@ -16,7 +17,7 @@ function RevealText({ children, delay = 0, className = "" }: { children: React.R
 export default function BrutalistTemplate({ bio, projects, skills, experiences, education, contact, certifications, customSections, sectionLayouts, sectionOrder, hiddenSections, notApplicableSections, editMode, onSectionEdit }: PortfolioData) {
   const name = [bio?.first_name, bio?.last_name].filter(Boolean).join(" ") || "YOUR NAME";
   const headline = bio?.headline || "Developer";
-  const hasContactLinks = Boolean(contact && (contact.email || contact.phone || contact.github_url || contact.linkedin_url || contact.twitter_url || contact.website_url));
+  const hasContactLinks = hasContactContent(contact);
 
   const bioLayout = getEffectiveLayout("bio", sectionLayouts);
   const projectsLayout = getEffectiveLayout("projects", sectionLayouts);
@@ -25,7 +26,21 @@ export default function BrutalistTemplate({ bio, projects, skills, experiences, 
   const educationLayout = getEffectiveLayout("education", sectionLayouts);
 
   const skillsByCategory = skills.reduce<Record<string, typeof skills>>((acc, s) => { const cat = s.category || "Other"; if (!acc[cat]) acc[cat] = []; acc[cat].push(s); return acc; }, {});
-  const renderableSections = getRenderableSectionIds(sectionOrder, hiddenSections, { bio: Boolean(bio?.first_name || bio?.last_name || bio?.headline || bio?.bio || bio?.avatar_url || bio?.location), projects: projects.length > 0, skills: skills.length > 0, experience: experiences.length > 0, education: education.length > 0, certifications: certifications.length > 0, contact: hasContactLinks, ...getCustomSectionAvailability(customSections) }, notApplicableSections);
+  const renderableSections = getRenderableSectionIds(
+    sectionOrder,
+    hiddenSections,
+    getPortfolioSectionAvailability({
+      bio,
+      projects,
+      skills,
+      experiences,
+      education,
+      contact,
+      certifications,
+      customSections,
+    }),
+    notApplicableSections
+  );
   const customSectionMap = buildCustomSectionMap(customSections, (section) =>
     renderSimpleCustomSection(
       section,

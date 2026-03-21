@@ -1,6 +1,7 @@
 import type { PortfolioData } from "@/components/templates";
 import { PORTFOLIO_SECTIONS } from "@/lib/constants";
-import { normalizeHiddenSections, normalizeSectionOrder, createCustomSectionId } from "@/lib/portfolioSections";
+import { getPortfolioSectionAvailability } from "@/lib/portfolioSectionAvailability";
+import { createCustomSectionId, getRenderableSectionIds } from "@/lib/portfolioSections";
 
 type PrintablePortfolioProps = PortfolioData & {
   name?: string | null;
@@ -10,26 +11,16 @@ type PrintablePortfolioProps = PortfolioData & {
   notApplicableSections?: string[] | null;
 };
 
-const hasSectionContent = (sectionId: string, data: PrintablePortfolioProps) => {
-  if (sectionId === "bio") return !!(data.bio?.first_name || data.bio?.last_name || data.bio?.headline || data.bio?.bio);
-  if (sectionId === "projects") return data.projects.length > 0;
-  if (sectionId === "skills") return data.skills.length > 0;
-  if (sectionId === "experience") return data.experiences.length > 0;
-  if (sectionId === "education") return data.education.length > 0;
-  if (sectionId === "certifications") return data.certifications.length > 0;
-  if (sectionId === "contact") return !!(data.contact?.email || data.contact?.phone || data.contact?.linkedin_url || data.contact?.github_url || data.contact?.website_url);
-  if (sectionId.startsWith("custom:")) return Boolean(data.customSections?.some((section) => createCustomSectionId(section.id) === sectionId && (section.title || section.body)));
-  return false;
-};
-
 const sectionTitleMap = Object.fromEntries(PORTFOLIO_SECTIONS.map((section) => [section.id, section.label]));
 
 export default function PrintablePortfolio(props: PrintablePortfolioProps) {
   const customOrder = (props.customSections || []).map((section) => createCustomSectionId(section.id));
-  const order = normalizeSectionOrder([...(props.sectionOrder || []), ...customOrder]);
-  const hiddenSections = normalizeHiddenSections(props.hiddenSections);
-  const notApplicableSections = new Set(props.notApplicableSections || []);
-  const visibleSections = order.filter((sectionId) => !hiddenSections.includes(sectionId) && !notApplicableSections.has(sectionId) && hasSectionContent(sectionId, props));
+  const visibleSections = getRenderableSectionIds(
+    [...(props.sectionOrder || []), ...customOrder],
+    props.hiddenSections,
+    getPortfolioSectionAvailability(props),
+    props.notApplicableSections
+  );
   const fullName = [props.bio?.first_name, props.bio?.last_name].filter(Boolean).join(" ").trim() || props.name || "Portfolio";
   const compact = props.mode === "resume";
 

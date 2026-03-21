@@ -1,9 +1,10 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Briefcase, Menu, X } from "lucide-react";
-import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useAuth } from "@/contexts/AuthContext";
+import { Briefcase, Menu, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { LandingAuthState } from "@/components/landing/types";
 
 const navLinks = [
   { href: "#features", label: "Features" },
@@ -11,11 +12,15 @@ const navLinks = [
   { href: "#templates", label: "Templates" },
 ];
 
-const Header = () => {
-  const { user, loading } = useAuth();
+type HeaderProps = {
+  authState: LandingAuthState;
+};
+
+const Header = ({ authState }: HeaderProps) => {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const authenticated = !loading && !!user;
+  const authenticated = authState === "authenticated";
+  const authResolved = authState !== "loading";
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -24,9 +29,9 @@ const Header = () => {
   }, []);
 
   return (
-    <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? "glass shadow-sm" : "bg-transparent"}`}>
+    <header className={`fixed left-0 right-0 top-0 z-50 transition-all duration-300 ${scrolled ? "glass shadow-sm" : "bg-transparent"}`}>
       <div className="container flex h-16 items-center justify-between">
-        <Link to="/" className="flex items-center gap-2.5 group">
+        <Link to="/" className="group flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-primary shadow-sm transition-transform group-hover:scale-105">
             <Briefcase className="h-4 w-4 text-primary-foreground" />
           </div>
@@ -42,7 +47,12 @@ const Header = () => {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
-          {authenticated ? (
+          {!authResolved ? (
+            <>
+              <Skeleton className="h-9 w-24 rounded-md" />
+              <Skeleton className="h-9 w-36 rounded-md" />
+            </>
+          ) : authenticated ? (
             <>
               <Button variant="ghost" size="sm" asChild>
                 <Link to="/dashboard">Dashboard</Link>
@@ -65,7 +75,7 @@ const Header = () => {
 
         <button
           className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground md:hidden"
-          onClick={() => setMobileOpen((v) => !v)}
+          onClick={() => setMobileOpen((open) => !open)}
           aria-label="Toggle menu"
         >
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -93,7 +103,12 @@ const Header = () => {
                 </a>
               ))}
               <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3">
-                {authenticated ? (
+                {!authResolved ? (
+                  <>
+                    <Skeleton className="h-9 w-full rounded-md" />
+                    <Skeleton className="h-9 w-full rounded-md" />
+                  </>
+                ) : authenticated ? (
                   <>
                     <Button variant="outline" size="sm" className="w-full" asChild>
                       <Link to="/dashboard" onClick={() => setMobileOpen(false)}>Dashboard</Link>

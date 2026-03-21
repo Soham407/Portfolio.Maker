@@ -5,18 +5,24 @@ import HowItWorks from "@/components/landing/HowItWorks";
 import TemplatesShowcase from "@/components/landing/TemplatesShowcase";
 import Footer from "@/components/landing/Footer";
 import { useAuth } from "@/contexts/AuthContext";
+import type { LandingAuthState } from "@/components/landing/types";
 
 const Index = () => {
   const { user, loading } = useAuth();
   const authenticated = !loading && !!user;
+  const authState: LandingAuthState = loading
+    ? "loading"
+    : authenticated
+      ? "authenticated"
+      : "anonymous";
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
-      <Hero />
+      <Header authState={authState} />
+      <Hero authState={authState} />
       <Features />
       <HowItWorks />
-      <TemplatesShowcase authenticated={authenticated} />
+      <TemplatesShowcase authState={authState} />
       <Footer />
     </div>
   );

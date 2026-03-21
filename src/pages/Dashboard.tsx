@@ -1,15 +1,33 @@
 import { Link, useNavigate } from "react-router-dom";
+import {
+  Briefcase,
+  LogOut,
+  Plus,
+  Settings,
+  Share2,
+  TrendingUp,
+  Users,
+  Zap,
+} from "lucide-react";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
-  Briefcase, PenTool, Eye, Layout, Share2, Plus, Settings, LogOut,
-  Copy, Trash2, Star, MoreVertical, Globe, Lock, TrendingUp, Users, Zap,
-  Twitter, Linkedin, CheckCheck
-} from "lucide-react";
-import { motion } from "framer-motion";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import CreatePortfolioDialog from "@/components/dashboard/CreatePortfolioDialog";
+import DashboardStatsGrid from "@/components/dashboard/DashboardStatsGrid";
+import PortfolioCard from "@/components/dashboard/PortfolioCard";
+import SharePortfolioDialog from "@/components/dashboard/SharePortfolioDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePortfolio } from "@/hooks/usePortfolio";
+import { useProfile } from "@/hooks/useProfile";
+import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
 import { useProjects } from "@/hooks/useProjects";
 import { useBio } from "@/hooks/useBio";
 import { useSkills } from "@/hooks/useSkills";
@@ -17,28 +35,14 @@ import { useExperience } from "@/hooks/useExperience";
 import { useEducation } from "@/hooks/useEducation";
 import { useContact } from "@/hooks/useContact";
 import { useCertifications } from "@/hooks/useCertifications";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { VISIBILITY_OPTIONS } from "@/lib/constants";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator
-} from "@/components/ui/dropdown-menu";
-import {
-  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+  canSharePortfolio,
+  getPortfolioPublicUrl,
+  getPortfolioShareUrl,
+} from "@/lib/portfolioSharing";
 import { useEffect, useState } from "react";
-import { PORTFOLIO_TYPES, VISIBILITY_OPTIONS } from "@/lib/constants";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-
-const portfolioTypeColors: Record<string, string> = {
-  general: "bg-blue-500/10 text-blue-700 border-blue-200/50",
-  developer: "bg-violet-500/10 text-violet-700 border-violet-200/50",
-  designer: "bg-pink-500/10 text-pink-700 border-pink-200/50",
-  marketing: "bg-orange-500/10 text-orange-700 border-orange-200/50",
-};
 
 const SECTION_LABELS: Record<string, string> = {
   bio: "Bio",
@@ -52,10 +56,29 @@ const SECTION_LABELS: Record<string, string> = {
 
 const Dashboard = () => {
   const { user, signOut } = useAuth();
+  const { profile, isLoading: profileLoading } = useProfile();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [selectedPortfolioId, setSelectedPortfolioId] = useState<string | undefined>(undefined);
-  const { portfolio, allPortfolios, createPortfolio, duplicatePortfolio, setDefaultPortfolio, deletePortfolio, updatePortfolio } = usePortfolio(selectedPortfolioId);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [sharePortfolioId, setSharePortfolioId] = useState<string | undefined>(undefined);
+  const [newName, setNewName] = useState("New Portfolio");
+  const [newType, setNewType] = useState("general");
+  const [copied, setCopied] = useState(false);
+
+  const {
+    portfolio,
+    allPortfolios,
+    isLoading,
+    isLoadingAll,
+    createPortfolio,
+    duplicatePortfolio,
+    setDefaultPortfolio,
+    deletePortfolio,
+    updatePortfolio,
+  } = usePortfolio(selectedPortfolioId);
+
   const portfolioId = portfolio?.id;
   const { bio } = useBio(portfolioId);
   const { projects } = useProjects(portfolioId);
@@ -64,119 +87,51 @@ const Dashboard = () => {
   const { education } = useEducation(portfolioId);
   const { contact } = useContact(portfolioId);
   const { certifications } = useCertifications(portfolioId);
-
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isShareOpen, setIsShareOpen] = useState(false);
-  const [sharePortfolioId, setSharePortfolioId] = useState<string | undefined>(undefined);
-  const [newName, setNewName] = useState("New Portfolio");
-  const [newType, setNewType] = useState("general");
-  const [copied, setCopied] = useState(false);
-
-  const { data: profile } = useQuery({
-    queryKey: ["profile", user?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("profiles").select("*").eq("id", user!.id).single();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!user,
-  });
-
-  const { data: viewCount } = useQuery({
-    queryKey: ["viewCount", portfolioId],
-    queryFn: async () => {
-      const { count, error } = await supabase
-        .from("portfolio_views")
-        .select("*", { count: "exact", head: true })
-        .eq("portfolio_id", portfolioId!);
-      if (error) throw error;
-      return count ?? 0;
-    },
-    enabled: !!portfolioId,
-  });
-
-  const { data: weekViewCount } = useQuery({
-    queryKey: ["weekViewCount", portfolioId],
-    queryFn: async () => {
-      const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      const { count, error } = await supabase
-        .from("portfolio_views")
-        .select("*", { count: "exact", head: true })
-        .eq("portfolio_id", portfolioId!)
-        .gte("created_at", since);
-      if (error) throw error;
-      return count ?? 0;
-    },
-    enabled: !!portfolioId,
-  });
-
-  const { data: dailyViews } = useQuery({
-    queryKey: ["dailyViews", portfolioId],
-    queryFn: async () => {
-      const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      const { data, error } = await supabase
-        .from("portfolio_views")
-        .select("created_at")
-        .eq("portfolio_id", portfolioId!)
-        .gte("created_at", since)
-        .order("created_at");
-      if (error) throw error;
-      // Group by date
-      const counts: Record<string, number> = {};
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
-        counts[d.toISOString().slice(0, 10)] = 0;
-      }
-      (data || []).forEach((row) => {
-        const day = row.created_at.slice(0, 10);
-        if (day in counts) counts[day] = (counts[day] || 0) + 1;
-      });
-      return Object.entries(counts).map(([date, views]) => ({
-        date: new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-        views,
-      }));
-    },
-    enabled: !!portfolioId,
-  });
-
-  const { data: recentViews } = useQuery({
-    queryKey: ["recentViews", portfolioId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("portfolio_views")
-        .select("created_at, viewer_ip")
-        .eq("portfolio_id", portfolioId!)
-        .order("created_at", { ascending: false })
-        .limit(5);
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!portfolioId,
-  });
-
-  const { data: completion } = useQuery({
-    queryKey: ["completion", portfolioId],
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc("get_portfolio_completion", { p_portfolio_id: portfolioId! });
-      if (error) throw error;
-      return data as number;
-    },
-    enabled: !!portfolioId,
-  });
+  const { viewCount, completion, isLoading: metricsLoading } = useDashboardMetrics(portfolioId);
 
   const selectedPortfolio = allPortfolios.find((item) => item.id === portfolioId) ?? portfolio;
-  const sharePortfolio = allPortfolios.find((item) => item.id === sharePortfolioId)
-    ?? (portfolio?.id === sharePortfolioId ? portfolio : undefined);
+  const sharePortfolio =
+    allPortfolios.find((item) => item.id === sharePortfolioId) ??
+    (portfolio?.id === sharePortfolioId ? portfolio : undefined);
+
   const builderHref = portfolioId ? `/builder?portfolio=${portfolioId}` : "/builder";
-  const previewHref = portfolioId ? `/preview?portfolio=${portfolioId}` : "/preview";
-  const templatesHref = portfolioId ? `/templates?portfolio=${portfolioId}` : "/templates";
+  const shareTargetBuilderHref = sharePortfolioId ? `/builder?portfolio=${sharePortfolioId}` : builderHref;
+
+  const shareTargetUrl = getPortfolioShareUrl({
+    origin: window.location.origin,
+    username: profile?.username,
+    portfolio: sharePortfolio,
+  });
+  const shareButtonEnabled = canSharePortfolio({
+    username: profile?.username,
+    portfolio,
+  });
+  const selectedPortfolioPublicUrl = getPortfolioPublicUrl({
+    origin: window.location.origin,
+    username: profile?.username,
+    portfolio: selectedPortfolio,
+  });
 
   useEffect(() => {
     if (!selectedPortfolioId || allPortfolios.some((item) => item.id === selectedPortfolioId)) {
       return;
     }
+
     setSelectedPortfolioId(undefined);
   }, [allPortfolios, selectedPortfolioId]);
+
+  const handleShareDialogChange = (open: boolean) => {
+    setIsShareOpen(open);
+    if (!open) {
+      setCopied(false);
+      setSharePortfolioId(undefined);
+    }
+  };
+
+  const handleOpenShare = (portfolioIdToShare: string | undefined) => {
+    setSharePortfolioId(portfolioIdToShare);
+    setIsShareOpen(true);
+  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -185,7 +140,11 @@ const Dashboard = () => {
 
   const handleCreatePortfolio = () => {
     createPortfolio.mutate(
-      { name: newName, portfolio_type: newType, user_type: profile?.user_type || "fresher" },
+      {
+        name: newName,
+        portfolio_type: newType,
+        user_type: profile?.user_type || "fresher",
+      },
       {
         onSuccess: (created) => {
           toast({ title: "Portfolio created!" });
@@ -195,7 +154,12 @@ const Dashboard = () => {
           setNewType("general");
           navigate(`/builder?portfolio=${created.id}`);
         },
-        onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+        onError: (error) =>
+          toast({
+            title: "Error",
+            description: error.message,
+            variant: "destructive",
+          }),
       }
     );
   };
@@ -206,7 +170,12 @@ const Dashboard = () => {
         setSelectedPortfolioId(duplicated.id);
         toast({ title: "Portfolio duplicated!" });
       },
-      onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+      onError: (error) =>
+        toast({
+          title: "Error",
+          description: error.message,
+          variant: "destructive",
+        }),
     });
   };
 
@@ -218,9 +187,14 @@ const Dashboard = () => {
 
   const handleDelete = (id: string) => {
     if (allPortfolios.length <= 1) {
-      toast({ title: "Cannot delete", description: "You need at least one portfolio", variant: "destructive" });
+      toast({
+        title: "Cannot delete",
+        description: "You need at least one portfolio",
+        variant: "destructive",
+      });
       return;
     }
+
     deletePortfolio.mutate(id, {
       onSuccess: () => toast({ title: "Portfolio deleted" }),
     });
@@ -235,11 +209,17 @@ const Dashboard = () => {
       });
       return;
     }
+
     updatePortfolio.mutate(
-      { id, visibility } as any,
+      { id, visibility },
       {
         onSuccess: () => toast({ title: `Portfolio visibility set to ${visibility}` }),
-        onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+        onError: (error) =>
+          toast({
+            title: "Error",
+            description: error.message,
+            variant: "destructive",
+          }),
       }
     );
   };
@@ -247,28 +227,27 @@ const Dashboard = () => {
   const handleCopyLink = async (url: string) => {
     await navigator.clipboard.writeText(url);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    window.setTimeout(() => setCopied(false), 2000);
     toast({ title: "Link copied!" });
   };
 
   const handleNativeShare = async (url: string) => {
+    if (typeof navigator.share === "undefined") return;
     await navigator.share({ title: "My Professional Portfolio", url });
   };
 
   const displayName = profile?.full_name || user?.email?.split("@")[0] || "there";
   const initials = displayName.slice(0, 2).toUpperCase();
   const completionVal = completion ?? 0;
-
-  // Completion nudges — which sections are missing
   const missingSections = [
-    { id: "bio", filled: !!(bio?.first_name) },
+    { id: "bio", filled: Boolean(bio?.first_name) },
     { id: "projects", filled: projects.length > 0 },
     { id: "skills", filled: skills.length > 0 },
     { id: "experience", filled: experiences.length > 0 },
     { id: "education", filled: education.length > 0 },
-    { id: "contact", filled: !!(contact?.email) },
+    { id: "contact", filled: Boolean(contact?.email) },
     { id: "certifications", filled: certifications.length > 0 },
-  ].filter((s) => !s.filled);
+  ].filter((section) => !section.filled);
 
   const stats = [
     {
@@ -295,41 +274,44 @@ const Dashboard = () => {
     },
     {
       label: "Visibility",
-      value: portfolio?.visibility === "unlisted" ? "Unlisted" : portfolio?.visibility === "public" ? "Public" : "Private",
-      sub: portfolio?.visibility === "public" ? "Live on the web" : portfolio?.visibility === "unlisted" ? "Secret share link" : "Only you can view it",
+      value:
+        portfolio?.visibility === "unlisted"
+          ? "Unlisted"
+          : portfolio?.visibility === "public"
+            ? "Public"
+            : "Private",
+      sub:
+        portfolio?.visibility === "public"
+          ? "Live on the web"
+          : portfolio?.visibility === "unlisted"
+            ? "Secret share link"
+            : "Only you can view it",
       icon: TrendingUp,
-      color: portfolio?.visibility === "public" ? "text-emerald-600 bg-emerald-500/10" : portfolio?.visibility === "unlisted" ? "text-amber-600 bg-amber-500/10" : "text-muted-foreground bg-muted",
+      color:
+        portfolio?.visibility === "public"
+          ? "text-emerald-600 bg-emerald-500/10"
+          : portfolio?.visibility === "unlisted"
+            ? "text-amber-600 bg-amber-500/10"
+            : "text-muted-foreground bg-muted",
     },
   ];
 
-  const publicUrl = `${window.location.origin}/p/${profile?.username}${portfolio?.share_token ? `/${portfolio.share_token}` : ""}`;
-  const shareUrl = portfolio?.visibility === "unlisted"
-    ? `${window.location.origin}/share/${portfolio?.share_token}`
-    : publicUrl;
-  const shareTargetPublicUrl = sharePortfolio
-    ? `${window.location.origin}/p/${profile?.username}${sharePortfolio.share_token ? `/${sharePortfolio.share_token}` : ""}`
-    : "";
-  const shareTargetUrl = sharePortfolio?.visibility === "unlisted"
-    ? `${window.location.origin}/share/${sharePortfolio.share_token}`
-    : shareTargetPublicUrl;
-  const shareTargetBuilderHref = sharePortfolioId ? `/builder?portfolio=${sharePortfolioId}` : builderHref;
-
-  const relativeTime = (iso: string) => {
-    const diff = Date.now() - new Date(iso).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return "just now";
-    if (mins < 60) return `${mins}m ago`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    return `${Math.floor(hrs / 24)}d ago`;
-  };
+  if (profileLoading || isLoading || isLoadingAll || metricsLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <p className="text-sm text-muted-foreground">Loading your dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="sticky top-0 z-40 border-b border-border bg-card/80 backdrop-blur-xl">
         <div className="container flex h-16 items-center justify-between">
-          <Link to="/" className="flex items-center gap-2.5 group">
+          <Link to="/" className="group flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-primary transition-transform group-hover:scale-105">
               <Briefcase className="h-4 w-4 text-primary-foreground" />
             </div>
@@ -338,10 +320,11 @@ const Dashboard = () => {
 
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="icon" asChild className="text-muted-foreground hover:text-foreground">
-              <Link to={`${builderHref}${builderHref.includes("?") ? "&" : "?"}section=settings`}><Settings className="h-4 w-4" /></Link>
+              <Link to={`${builderHref}${builderHref.includes("?") ? "&" : "?"}section=settings`}>
+                <Settings className="h-4 w-4" />
+              </Link>
             </Button>
 
-            {/* Avatar dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-primary text-xs font-semibold text-primary-foreground ring-2 ring-background ring-offset-0 transition-opacity hover:opacity-90">
@@ -350,15 +333,20 @@ const Dashboard = () => {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52">
                 <div className="px-2 py-1.5">
-                  <p className="text-sm font-semibold truncate">{displayName}</p>
-                  <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+                  <p className="truncate text-sm font-semibold">{displayName}</p>
+                  <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
                 </div>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link to={`${builderHref}${builderHref.includes("?") ? "&" : "?"}section=settings`}><Settings className="mr-2 h-4 w-4" /> Settings</Link>
+                  <Link to={`${builderHref}${builderHref.includes("?") ? "&" : "?"}section=settings`}>
+                    <Settings className="mr-2 h-4 w-4" /> Settings
+                  </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive">
+                <DropdownMenuItem
+                  onClick={handleSignOut}
+                  className="text-destructive focus:text-destructive"
+                >
                   <LogOut className="mr-2 h-4 w-4" /> Sign out
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -368,55 +356,36 @@ const Dashboard = () => {
       </header>
 
       <main className="container py-8">
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-
-          {/* Welcome + New Portfolio */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+        >
           <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-2xl font-bold">Welcome back, {displayName} 👋</h1>
+              <h1 className="text-2xl font-bold">Welcome back, {displayName}</h1>
               <p className="mt-0.5 text-sm text-muted-foreground">
                 {completionVal < 100
-                  ? `Your portfolio is ${completionVal}% complete — keep going!`
+                  ? `Your portfolio is ${completionVal}% complete - keep going!`
                   : "Your portfolio is all set. Share it with the world!"}
               </p>
             </div>
-            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-              <Button variant="hero" size="sm" onClick={() => setIsCreateOpen(true)}>
-                <Plus className="mr-1.5 h-4 w-4" /> New Portfolio
-              </Button>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Create New Portfolio</DialogTitle>
-                  <DialogDescription>Add a new portfolio for different purposes.</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label>Portfolio Name</Label>
-                    <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Software Engineer Portfolio" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Portfolio Type</Label>
-                    <Select value={newType} onValueChange={setNewType}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {PORTFOLIO_TYPES.map((t) => (
-                          <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
-                  <Button variant="hero" onClick={handleCreatePortfolio} disabled={createPortfolio.isPending}>
-                    {createPortfolio.isPending ? "Creating..." : "Create Portfolio"}
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+            <Button variant="hero" size="sm" onClick={() => setIsCreateOpen(true)}>
+              <Plus className="mr-1.5 h-4 w-4" /> New Portfolio
+            </Button>
           </div>
 
-          {/* Completion banner */}
+          <CreatePortfolioDialog
+            open={isCreateOpen}
+            onOpenChange={setIsCreateOpen}
+            newName={newName}
+            newType={newType}
+            onNameChange={setNewName}
+            onTypeChange={setNewType}
+            onCreate={handleCreatePortfolio}
+            isCreating={createPortfolio.isPending}
+          />
+
           {completionVal < 100 && (
             <motion.div
               initial={{ opacity: 0, y: -8 }}
@@ -431,13 +400,13 @@ const Dashboard = () => {
               {missingSections.length > 0 && (
                 <div className="mt-3 flex flex-wrap items-center gap-1.5">
                   <span className="text-xs text-muted-foreground">Missing:</span>
-                  {missingSections.map((s) => (
+                  {missingSections.map((section) => (
                     <Link
-                      key={s.id}
-                      to={`${builderHref}${builderHref.includes("?") ? "&" : "?"}section=${s.id}`}
-                      className="inline-flex items-center rounded-md border border-primary/30 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+                      key={section.id}
+                      to={`${builderHref}${builderHref.includes("?") ? "&" : "?"}section=${section.id}`}
+                      className="inline-flex items-center rounded-md border border-primary/30 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
                     >
-                      {SECTION_LABELS[s.id]}
+                      {SECTION_LABELS[section.id]}
                     </Link>
                   ))}
                 </div>
@@ -445,159 +414,35 @@ const Dashboard = () => {
             </motion.div>
           )}
 
-          {/* Stats Grid */}
-          <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {stats.map((stat, i) => (
-              <motion.div
-                key={stat.label}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.06 }}
-                className="rounded-xl border border-border bg-card p-5 shadow-card"
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">{stat.label}</p>
-                    <p className="mt-1 text-2xl font-bold">{stat.value}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{stat.sub}</p>
-                  </div>
-                  <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${stat.color}`}>
-                    <stat.icon className="h-4 w-4" />
-                  </div>
-                </div>
-                {stat.progress !== undefined && (
-                  <Progress value={stat.progress} className="mt-3 h-1.5" />
-                )}
-              </motion.div>
-            ))}
-          </div>
+          <DashboardStatsGrid stats={stats} />
 
           <div>
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="font-semibold">Your Portfolios</h2>
-                <Badge variant="secondary" className="text-xs">{allPortfolios.length} total</Badge>
-              </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {allPortfolios.map((p) => (
-                    <div
-                      key={p.id}
-                      onClick={() => setSelectedPortfolioId(p.id)}
-                      className={`relative rounded-xl border bg-card p-4 shadow-card transition-all ${
-                        p.id === portfolioId
-                          ? "border-primary/40 ring-2 ring-primary/20"
-                          : p.is_default
-                            ? "border-primary/40 ring-1 ring-primary/10"
-                            : "border-border hover:border-primary/20"
-                      } cursor-pointer`}
-                    >
-                    {/* Color bar at top */}
-                    <div className={`absolute left-0 right-0 top-0 h-1 rounded-t-xl bg-gradient-primary ${p.is_default ? "opacity-100" : "opacity-30"}`} />
-
-                    <div className="flex items-start justify-between pt-1">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <h3 className="font-semibold text-sm truncate">{p.name || "Untitled"}</h3>
-                          {p.id === portfolioId && <Badge className="text-[10px] px-1.5 py-0">Selected</Badge>}
-                          {p.is_default && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Default</Badge>}
-                        </div>
-                        <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
-                          <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium capitalize ${portfolioTypeColors[p.portfolio_type || "general"] || "bg-muted text-muted-foreground border-border"}`}>
-                            {p.portfolio_type || "general"}
-                          </span>
-                          {p.visibility === "unlisted" ? (
-                            <Badge variant="outline" className="gap-1 text-[10px] px-1.5 py-0 text-amber-600 border-amber-200"><Share2 className="h-2.5 w-2.5" /> Unlisted</Badge>
-                          ) : p.visibility === "public" ? (
-                            <Badge variant="outline" className="gap-1 text-[10px] px-1.5 py-0 text-emerald-600 border-emerald-200"><Globe className="h-2.5 w-2.5" /> Public</Badge>
-                          ) : (
-                            <Badge variant="outline" className="gap-1 text-[10px] px-1.5 py-0"><Lock className="h-2.5 w-2.5" /> Private</Badge>
-                          )}
-                        </div>
-                        <p className="mt-1.5 text-xs text-muted-foreground">{p.template_id || "minimal"} template</p>
-                      </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 shrink-0 ml-1"
-                            onClick={(event) => event.stopPropagation()}
-                          >
-                            <MoreVertical className="h-3.5 w-3.5" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => navigate(`/builder?portfolio=${p.id}`)}>
-                            <PenTool className="mr-2 h-3.5 w-3.5" /> Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => navigate(`/preview?portfolio=${p.id}`)}>
-                            <Eye className="mr-2 h-3.5 w-3.5" /> Preview
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => navigate(`/templates?portfolio=${p.id}`)}>
-                            <Layout className="mr-2 h-3.5 w-3.5" /> Templates
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setSharePortfolioId(p.id);
-                              setIsShareOpen(true);
-                            }}
-                          >
-                            <Share2 className="mr-2 h-3.5 w-3.5" /> Share
-                          </DropdownMenuItem>
-                          <DropdownMenuItem disabled>
-                            <Users className="mr-2 h-3.5 w-3.5" /> Profile Views: {p.id === portfolioId ? (viewCount ?? 0) : "Select to view"}
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => handleDuplicate(p.id)}>
-                            <Copy className="mr-2 h-3.5 w-3.5" /> Duplicate
-                          </DropdownMenuItem>
-                          {!p.is_default && (
-                            <DropdownMenuItem onClick={() => handleSetDefault(p.id)}>
-                              <Star className="mr-2 h-3.5 w-3.5" /> Set as Default
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuSeparator />
-                          {VISIBILITY_OPTIONS.map((option) => (
-                            <DropdownMenuItem key={option.value} onClick={() => handleSetVisibility(p.id, option.value)}>
-                              {option.value === "public" && <Globe className="mr-2 h-3.5 w-3.5" />}
-                              {option.value === "private" && <Lock className="mr-2 h-3.5 w-3.5" />}
-                              {option.value === "unlisted" && <Share2 className="mr-2 h-3.5 w-3.5" />}
-                              {option.label}
-                            </DropdownMenuItem>
-                          ))}
-                          {allPortfolios.length > 1 && (
-                            <>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => handleDelete(p.id)} className="text-destructive focus:text-destructive">
-                                <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete
-                              </DropdownMenuItem>
-                            </>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-
-                    <div className="mt-4 flex items-center justify-between gap-3">
-                      <p className="text-[11px] text-muted-foreground">
-                        {p.id === portfolioId ? "Active portfolio" : "Click card to select"}
-                      </p>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 text-xs"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          navigate(`/preview?portfolio=${p.id}`);
-                        }}
-                      >
-                        <Eye className="mr-1 h-3 w-3" /> Preview
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="font-semibold">Your Portfolios</h2>
+              <Badge variant="secondary" className="text-xs">
+                {allPortfolios.length} total
+              </Badge>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {allPortfolios.map((item) => (
+                <PortfolioCard
+                  key={item.id}
+                  portfolio={item}
+                  isSelected={item.id === portfolioId}
+                  viewCount={viewCount}
+                  canDelete={allPortfolios.length > 1}
+                  visibilityOptions={VISIBILITY_OPTIONS}
+                  onSelect={setSelectedPortfolioId}
+                  onShare={handleOpenShare}
+                  onDuplicate={handleDuplicate}
+                  onSetDefault={handleSetDefault}
+                  onSetVisibility={handleSetVisibility}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </div>
           </div>
 
-          {/* Share Banner */}
           <div className="mt-6 rounded-xl border border-primary/20 bg-gradient-to-br from-primary/5 to-violet-500/5 p-5">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-4">
@@ -607,9 +452,11 @@ const Dashboard = () => {
                 <div>
                   <h3 className="font-semibold">Share Your Portfolio</h3>
                   <p className="text-sm text-muted-foreground">
-                    {profile?.username
-                      ? `${selectedPortfolio?.name || "Selected portfolio"} will be shared at /p/${profile.username}`
-                      : "Set a username in settings to get a public URL"}
+                    {!profile?.username
+                      ? "Set a username in settings to get a public URL."
+                      : selectedPortfolio?.visibility === "unlisted"
+                        ? `${selectedPortfolio?.name || "Selected portfolio"} uses a private share link.`
+                        : selectedPortfolioPublicUrl || `/p/${profile.username}`}
                   </p>
                 </div>
               </div>
@@ -617,108 +464,28 @@ const Dashboard = () => {
                 <Button
                   variant="hero"
                   size="sm"
-                  disabled={portfolio?.visibility === "public" ? !profile?.username : !portfolio?.share_token}
-                  onClick={() => {
-                    setSharePortfolioId(portfolioId);
-                    setIsShareOpen(true);
-                  }}
+                  disabled={!shareButtonEnabled}
+                  onClick={() => handleOpenShare(portfolioId)}
                 >
                   Share Portfolio
                 </Button>
               </div>
             </div>
           </div>
-
         </motion.div>
       </main>
 
-      {/* Share Modal */}
-      <Dialog
+      <SharePortfolioDialog
         open={isShareOpen}
-        onOpenChange={(open) => {
-          setIsShareOpen(open);
-          if (!open) {
-            setCopied(false);
-            setSharePortfolioId(undefined);
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Share Portfolio</DialogTitle>
-            <DialogDescription>
-              {!profile?.username && sharePortfolio?.visibility === "public"
-                ? "Set a username first to get your public URL."
-                : sharePortfolio?.visibility === "private"
-                ? "Change visibility to public or unlisted before sharing."
-                : sharePortfolio?.visibility === "unlisted"
-                ? "Share your secret link with selected people."
-                : "Share your public portfolio with the world."}
-            </DialogDescription>
-          </DialogHeader>
-          {(!profile?.username && sharePortfolio?.visibility === "public") || sharePortfolio?.visibility === "private" ? (
-            <div className="py-2">
-              <Button variant="hero" asChild className="w-full">
-                <Link
-                  to={`${shareTargetBuilderHref}${shareTargetBuilderHref.includes("?") ? "&" : "?"}section=settings`}
-                  onClick={() => setIsShareOpen(false)}
-                >
-                  <Settings className="mr-2 h-4 w-4" />
-                  {!profile?.username ? "Set Username in Settings" : "Update Visibility in Settings"}
-                </Link>
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-4 py-2">
-              <div className="space-y-2">
-                <Label>{sharePortfolio?.visibility === "unlisted" ? "Your secret share URL" : "Your public URL"}</Label>
-                <div className="flex gap-2">
-                  <Input value={shareTargetUrl} readOnly className="flex-1 text-sm" />
-                  <Button size="sm" variant="outline" onClick={() => void handleCopyLink(shareTargetUrl)} disabled={!shareTargetUrl}>
-                    {copied ? <CheckCheck className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {typeof navigator.share !== "undefined" && (
-                  <Button variant="outline" size="sm" className="flex-1" onClick={() => void handleNativeShare(shareTargetUrl)} disabled={!shareTargetUrl}>
-                    <Share2 className="mr-1.5 h-3.5 w-3.5" /> Share
-                  </Button>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1"
-                  asChild
-                >
-                  <a
-                    href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(shareTargetUrl)}&text=${encodeURIComponent("Check out my portfolio!")}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <Twitter className="mr-1.5 h-3.5 w-3.5" /> Twitter
-                  </a>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1"
-                  asChild
-                >
-                  <a
-                    href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareTargetUrl)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <Linkedin className="mr-1.5 h-3.5 w-3.5" /> LinkedIn
-                  </a>
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
+        onOpenChange={handleShareDialogChange}
+        portfolio={sharePortfolio}
+        username={profile?.username}
+        builderHref={shareTargetBuilderHref}
+        shareUrl={shareTargetUrl}
+        copied={copied}
+        onCopyLink={handleCopyLink}
+        onNativeShare={handleNativeShare}
+      />
     </div>
   );
 };

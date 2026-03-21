@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { Sparkles, Github, Layout, Eye, Users, Shield } from "lucide-react";
+import { TEMPLATE_CATALOG } from "@/lib/templateCatalog";
 
 const features = [
   {
@@ -19,7 +20,7 @@ const features = [
   {
     icon: Layout,
     title: "Premium Templates",
-    description: "Choose from 5 professionally designed templates that make you stand out.",
+    description: `Choose from ${TEMPLATE_CATALOG.length} professionally designed templates that make you stand out.`,
     color: "text-primary bg-primary/10 group-hover:bg-primary group-hover:text-white",
     accent: "group-hover:border-primary/20",
   },

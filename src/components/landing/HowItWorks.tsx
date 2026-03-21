@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { UserPlus, Palette, PenTool, Share2 } from "lucide-react";
+import { TEMPLATE_CATALOG } from "@/lib/templateCatalog";
 
 const steps = [
   {
@@ -13,7 +14,7 @@ const steps = [
     icon: Palette,
     step: "02",
     title: "Choose Template",
-    description: "Pick from 5 premium, recruiter-approved templates tailored to your industry.",
+    description: `Pick from ${TEMPLATE_CATALOG.length} premium, recruiter-approved templates tailored to your industry.`,
     color: "bg-primary",
   },
   {
@@ -27,7 +28,7 @@ const steps = [
     icon: Share2,
     step: "04",
     title: "Share & Shine",
-    description: "Publish your portfolio with a custom URL and start getting noticed.",
+    description: "Publish to your public username page or send an unlisted share link for private reviews.",
     color: "bg-orange-500",
   },
 ];
@@ -55,23 +56,22 @@ const HowItWorks = () => {
         </motion.div>
 
         <div className="relative">
-          {/* Connecting line — desktop only */}
+          {/* Connecting line - desktop only */}
           <div className="absolute left-0 right-0 top-7 hidden h-px bg-gradient-to-r from-transparent via-border to-transparent lg:block" />
 
           <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
-            {steps.map((step, i) => (
+            {steps.map((step, index) => (
               <motion.div
                 key={step.step}
                 initial={{ opacity: 0, y: 24 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ delay: i * 0.15 }}
+                transition={{ delay: index * 0.15 }}
                 className="relative flex flex-col items-center text-center"
               >
-                {/* Step circle */}
                 <div className={`relative z-10 mb-5 flex h-14 w-14 items-center justify-center rounded-2xl ${step.color} text-white shadow-lg`}>
                   <step.icon className="h-6 w-6" />
-                  <div className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-background border border-border">
+                  <div className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-border bg-background">
                     <span className="text-[9px] font-bold text-muted-foreground">{step.step}</span>
                   </div>
                 </div>

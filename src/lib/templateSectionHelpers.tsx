@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import type { CSSProperties } from "react";
 import SectionWrapper from "@/components/preview/SectionWrapper";
 import type { CustomSectionProp } from "@/components/templates/PortfolioTemplateProps";
+import { getCustomSectionAvailability as getSharedCustomSectionAvailability } from "./portfolioSectionAvailability";
 import { createCustomSectionId } from "./portfolioSections";
 
 type CustomSectionRenderer = (section: CustomSectionProp, index: number) => JSX.Element;
@@ -17,8 +18,7 @@ export const buildCustomSectionMap = (
 export const hasCustomSections = (customSections: CustomSectionProp[] | undefined) =>
   Boolean(customSections && customSections.length > 0);
 
-export const getCustomSectionAvailability = (customSections: CustomSectionProp[] | undefined) =>
-  Object.fromEntries((customSections || []).map((section) => [createCustomSectionId(section.id), Boolean(section.title || section.body)]));
+export const getCustomSectionAvailability = getSharedCustomSectionAvailability;
 
 export const renderSimpleCustomSection = (
   section: CustomSectionProp,

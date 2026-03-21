@@ -8,19 +8,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getTemplateComponent } from "@/components/templates";
-import { useBio } from "@/hooks/useBio";
-import { useCertifications } from "@/hooks/useCertifications";
-import { useContact } from "@/hooks/useContact";
-import { useCustomSections } from "@/hooks/useCustomSections";
-import { useEducation } from "@/hooks/useEducation";
-import { useExperience } from "@/hooks/useExperience";
-import { usePortfolio } from "@/hooks/usePortfolio";
-import { useProjects } from "@/hooks/useProjects";
-import { useSkills } from "@/hooks/useSkills";
-import { useProfile } from "@/hooks/useProfile";
+import { usePortfolioPreviewData } from "@/hooks/usePortfolioPreviewData";
 import { toast } from "@/hooks/use-toast";
-import { DEFAULT_SECTION_ORDER, PORTFOLIO_SECTIONS } from "@/lib/constants";
-import { getOrderedCustomSectionIds, isCustomSectionId, normalizeHiddenSections, normalizeSectionOrder } from "@/lib/portfolioSections";
+import { PORTFOLIO_SECTIONS } from "@/lib/constants";
+import { getOrderedCustomSectionIds, isCustomSectionId, normalizeSectionOrder } from "@/lib/portfolioSections";
 import { PreviewLayoutProvider } from "@/components/preview/PreviewLayoutContext";
 
 const TEMPLATE_NAMES: Record<string, string> = {
@@ -38,27 +29,23 @@ const areSectionListsEqual = (left: string[], right: string[]) => (
 const Preview = () => {
   const [searchParams] = useSearchParams();
   const portfolioParam = searchParams.get("portfolio") ?? undefined;
-  const { portfolio, isLoading: portfolioLoading, updateSectionLayouts, updateSectionControls } = usePortfolio(portfolioParam);
-  const { profile } = useProfile();
-  const portfolioId = portfolio?.id;
-  const templateId = portfolio?.template_id ?? "minimal";
+  const {
+    portfolio,
+    profile,
+    portfolioId,
+    templateId,
+    defaultOrderForReset,
+    templateData,
+    isLoading: previewDataLoading,
+    updateSectionLayouts,
+    updateSectionControls,
+  } = usePortfolioPreviewData(portfolioParam);
+  const { customSections } = templateData;
   const dashboardHref = "/dashboard";
   const builderHref = portfolioId ? `/builder?portfolio=${portfolioId}` : "/builder";
 
-  const { bio } = useBio(portfolioId);
-  const { projects } = useProjects(portfolioId);
-  const { skills } = useSkills(portfolioId);
-  const { experiences } = useExperience(portfolioId);
-  const { education } = useEducation(portfolioId);
-  const { contact } = useContact(portfolioId);
-  const { certifications } = useCertifications(portfolioId);
-  const { customSections } = useCustomSections(portfolioId);
-
   const TemplateComponent = getTemplateComponent(templateId);
   const templateName = TEMPLATE_NAMES[templateId] ?? templateId;
-  const defaultOrderForReset = normalizeSectionOrder(
-    DEFAULT_SECTION_ORDER[(profile?.user_type as keyof typeof DEFAULT_SECTION_ORDER) || "fresher"]
-  );
 
   const [editMode, setEditMode] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
@@ -89,11 +76,10 @@ const Preview = () => {
   } | null>(null);
 
   useEffect(() => {
-    const nextLayouts = (portfolio?.section_layouts as Record<string, string>) ?? {};
-    const customSectionIds = (customSections || []).map((section) => `custom:${section.id}`);
-    const nextOrder = normalizeSectionOrder([...(portfolio?.section_order ?? defaultOrderForReset), ...customSectionIds]);
-    const nextHidden = normalizeHiddenSections(portfolio?.hidden_sections);
-    const nextNotApplicable = (portfolio?.not_applicable_sections as string[] | null) ?? [];
+    const nextLayouts = templateData.sectionLayouts ?? {};
+    const nextOrder = templateData.sectionOrder ?? defaultOrderForReset;
+    const nextHidden = templateData.hiddenSections ?? [];
+    const nextNotApplicable = templateData.notApplicableSections ?? [];
 
     lastSyncedLayoutsRef.current = nextLayouts;
     lastSyncedOrderRef.current = nextOrder;
@@ -107,7 +93,7 @@ const Preview = () => {
     setSectionOrder(nextOrder);
     setHiddenSections(nextHidden);
     setNotApplicableSections(nextNotApplicable);
-  }, [customSections, defaultOrderForReset, portfolio]);
+  }, [defaultOrderForReset, templateData.hiddenSections, templateData.notApplicableSections, templateData.sectionLayouts, templateData.sectionOrder]);
 
   const rollbackSectionLayouts = useCallback(() => {
     setSectionLayouts(lastSyncedLayoutsRef.current);
@@ -426,7 +412,7 @@ const Preview = () => {
     toast({ title: "Link copied!" });
   };
 
-  if (portfolioLoading) {
+  if (previewDataLoading) {
     return (
       <div className="min-h-screen bg-background">
         <div className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur">
@@ -449,7 +435,7 @@ const Preview = () => {
     );
   }
 
-  if (portfolioParam && !portfolio) {
+  if (!portfolio) {
     return (
       <div className="min-h-screen bg-background">
         <div className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur">
@@ -464,9 +450,13 @@ const Preview = () => {
 
         <div className="flex min-h-[calc(100vh-3rem)] items-center justify-center px-6">
           <div className="max-w-md text-center">
-            <h1 className="text-2xl font-semibold text-foreground">Preview not available</h1>
+            <h1 className="text-2xl font-semibold text-foreground">
+              {portfolioParam ? "Preview not available" : "No portfolio selected"}
+            </h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              This portfolio could not be found, or you no longer have access to it.
+              {portfolioParam
+                ? "This portfolio could not be found, or you no longer have access to it."
+                : "Create or select a portfolio from your dashboard before opening preview."}
             </p>
             <Button className="mt-6" asChild>
               <Link to={dashboardHref}>Return to Dashboard</Link>
@@ -500,6 +490,14 @@ const Preview = () => {
         </div>
       </div>
 
+      {editMode && (
+        <div className="border-b border-border bg-muted/40">
+          <div className="container py-2 text-xs text-muted-foreground">
+            Bio stays pinned first and Contact stays pinned last while you reorder the rest of the page.
+          </div>
+        </div>
+      )}
+
       <PreviewLayoutProvider
         value={{
           editMode,
@@ -514,14 +512,7 @@ const Preview = () => {
       >
         <div>
           <TemplateComponent
-            bio={bio ?? null}
-            projects={projects ?? []}
-            skills={skills ?? []}
-            experiences={experiences ?? []}
-            education={education ?? []}
-            contact={contact ?? null}
-            certifications={certifications ?? []}
-            customSections={customSections ?? []}
+            {...templateData}
             sectionLayouts={sectionLayouts}
             sectionOrder={sectionOrder}
             hiddenSections={hiddenSections}

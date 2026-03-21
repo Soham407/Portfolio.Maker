@@ -1,7 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables, TablesUpdate } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { DEFAULT_SECTION_ORDER } from "@/lib/constants";
+
+type PortfolioRecord = Tables<"portfolios">;
+type PortfolioUpdate = TablesUpdate<"portfolios"> & { id?: string };
 
 const generateShareToken = () => {
   return Array.from(crypto.getRandomValues(new Uint8Array(18)))
@@ -14,9 +18,9 @@ export const usePortfolio = (specificPortfolioId?: string) => {
   const queryClient = useQueryClient();
   const portfolioQueryKey = ["portfolio", specificPortfolioId || "default", user?.id];
 
-  const syncPortfolioCaches = (nextPortfolio: Record<string, any>) => {
+  const syncPortfolioCaches = (nextPortfolio: PortfolioRecord) => {
     queryClient.setQueryData(portfolioQueryKey, nextPortfolio);
-    queryClient.setQueryData(["portfolios-all", user?.id], (current: Record<string, any>[] | undefined) => {
+    queryClient.setQueryData(["portfolios-all", user?.id], (current: PortfolioRecord[] | undefined) => {
       if (!current) return current;
       return current.map((entry) => (entry.id === nextPortfolio.id ? { ...entry, ...nextPortfolio } : entry));
     });
@@ -194,27 +198,34 @@ export const usePortfolio = (specificPortfolioId?: string) => {
   });
 
   const updatePortfolio = useMutation({
-    mutationFn: async (updates: Record<string, any>) => {
+    mutationFn: async (updates: PortfolioUpdate) => {
       const { id: updateId, ...rest } = updates;
       const targetId = updateId || specificPortfolioId || portfolio?.id;
       if (!targetId) throw new Error("No portfolio to update");
+      const targetPortfolio =
+        allPortfolios.find((entry) => entry.id === targetId) ??
+        (portfolio?.id === targetId ? portfolio : undefined);
+      const nextUpdates: TablesUpdate<"portfolios"> = { ...rest };
 
-      if (rest.visibility) {
-        rest.is_public = rest.visibility === "public";
+      if (nextUpdates.visibility) {
+        nextUpdates.is_public = nextUpdates.visibility === "public";
       }
-      if (rest.is_public === true && !rest.visibility) {
-        rest.visibility = "public";
+      if (nextUpdates.is_public === true && !nextUpdates.visibility) {
+        nextUpdates.visibility = "public";
       }
-      if (rest.is_public === false && !rest.visibility) {
-        rest.visibility = "private";
+      if (nextUpdates.is_public === false && !nextUpdates.visibility) {
+        nextUpdates.visibility = "private";
       }
-      if ((rest.visibility === "public" || rest.visibility === "unlisted") && !rest.share_token) {
-        rest.share_token = portfolio?.share_token || generateShareToken();
+      if (
+        (nextUpdates.visibility === "public" || nextUpdates.visibility === "unlisted") &&
+        !nextUpdates.share_token
+      ) {
+        nextUpdates.share_token = targetPortfolio?.share_token || generateShareToken();
       }
 
       const { data, error } = await supabase
         .from("portfolios")
-        .update(rest)
+        .update(nextUpdates)
         .eq("id", targetId)
         .select()
         .single();

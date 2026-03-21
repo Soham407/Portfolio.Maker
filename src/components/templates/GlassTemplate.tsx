@@ -1,12 +1,13 @@
-import { motion } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import { Github, Linkedin, Twitter, Globe, Mail, Phone, ExternalLink, MapPin, Award } from "lucide-react";
 import type { PortfolioData } from "./PortfolioTemplateProps";
 import SectionWrapper from "@/components/preview/SectionWrapper";
+import { getPortfolioSectionAvailability, hasContactContent } from "@/lib/portfolioSectionAvailability";
 import { getRenderableSectionIds } from "@/lib/portfolioSections";
 import { getEffectiveLayout } from "@/lib/sectionLayouts";
-import { buildCustomSectionMap, getCustomSectionAvailability, renderSimpleCustomSection } from "@/lib/templateSectionHelpers";
+import { buildCustomSectionMap, renderSimpleCustomSection } from "@/lib/templateSectionHelpers";
 
-const fadeBlur: any = {
+const fadeBlur: Variants = {
   hidden: { opacity: 0, filter: "blur(8px)", y: 20 },
   visible: (i: number) => ({
     opacity: 1,
@@ -16,7 +17,7 @@ const fadeBlur: any = {
   }),
 };
 
-const container: any = {
+const container: Variants = {
   hidden: {},
   visible: { transition: { staggerChildren: 0.08 } },
 };
@@ -38,7 +39,7 @@ export default function GlassTemplate({
   onSectionEdit,
 }: PortfolioData) {
   const name = [bio?.first_name, bio?.last_name].filter(Boolean).join(" ") || "Your Name";
-  const hasContactLinks = Boolean(contact && (contact.email || contact.phone || contact.github_url || contact.linkedin_url || contact.twitter_url || contact.website_url));
+  const hasContactLinks = hasContactContent(contact);
 
   const bioLayout = getEffectiveLayout("bio", sectionLayouts);
   const projectsLayout = getEffectiveLayout("projects", sectionLayouts);
@@ -46,16 +47,21 @@ export default function GlassTemplate({
   const experienceLayout = getEffectiveLayout("experience", sectionLayouts);
   const educationLayout = getEffectiveLayout("education", sectionLayouts);
 
-  const renderableSections = getRenderableSectionIds(sectionOrder, hiddenSections, {
-    bio: Boolean(bio?.first_name || bio?.last_name || bio?.headline || bio?.bio || bio?.avatar_url || bio?.location),
-    projects: projects.length > 0,
-    skills: skills.length > 0,
-    experience: experiences.length > 0,
-    education: education.length > 0,
-    certifications: certifications.length > 0,
-    contact: hasContactLinks,
-    ...getCustomSectionAvailability(customSections),
-  }, notApplicableSections);
+  const renderableSections = getRenderableSectionIds(
+    sectionOrder,
+    hiddenSections,
+    getPortfolioSectionAvailability({
+      bio,
+      projects,
+      skills,
+      experiences,
+      education,
+      contact,
+      certifications,
+      customSections,
+    }),
+    notApplicableSections
+  );
 
   const customSectionMap = buildCustomSectionMap(customSections, (section) =>
     renderSimpleCustomSection(

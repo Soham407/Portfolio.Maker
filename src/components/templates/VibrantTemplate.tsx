@@ -1,14 +1,15 @@
-import { motion } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import { Github, Linkedin, Twitter, Mail, Phone, ExternalLink, MapPin, Award } from "lucide-react";
 import type { PortfolioData } from "./PortfolioTemplateProps";
 import SectionWrapper from "@/components/preview/SectionWrapper";
+import { getPortfolioSectionAvailability, hasContactContent } from "@/lib/portfolioSectionAvailability";
 import { getRenderableSectionIds } from "@/lib/portfolioSections";
 import { getEffectiveLayout } from "@/lib/sectionLayouts";
-import { buildCustomSectionMap, getCustomSectionAvailability, renderSimpleCustomSection } from "@/lib/templateSectionHelpers";
+import { buildCustomSectionMap, renderSimpleCustomSection } from "@/lib/templateSectionHelpers";
 
-const spring: any = { hidden: { opacity: 0, scale: 0.85 }, visible: (i: number) => ({ opacity: 1, scale: 1, transition: { delay: i * 0.07, type: "spring", stiffness: 200, damping: 18 } }) };
-const fadeUp: any = { hidden: { opacity: 0, y: 30 }, visible: (i: number) => ({ opacity: 1, y: 0, transition: { delay: i * 0.1, duration: 0.55, ease: [0.16, 1, 0.3, 1] } }) };
-const container: any = { hidden: {}, visible: { transition: { staggerChildren: 0.07 } } };
+const spring: Variants = { hidden: { opacity: 0, scale: 0.85 }, visible: (i: number) => ({ opacity: 1, scale: 1, transition: { delay: i * 0.07, type: "spring", stiffness: 200, damping: 18 } }) };
+const fadeUp: Variants = { hidden: { opacity: 0, y: 30 }, visible: (i: number) => ({ opacity: 1, y: 0, transition: { delay: i * 0.1, duration: 0.55, ease: [0.16, 1, 0.3, 1] } }) };
+const container: Variants = { hidden: {}, visible: { transition: { staggerChildren: 0.07 } } };
 const LIME = "#CBFF4D";
 const DARK = "#111111";
 const PROJECT_COLORS = [{ bg: "#F3E8FF", border: "#C084FC", tag: "#7C3AED" }, { bg: "#FEF9C3", border: "#FACC15", tag: "#B45309" }, { bg: "#DCFCE7", border: "#4ADE80", tag: "#16A34A" }, { bg: "#FEE2E2", border: "#F87171", tag: "#B91C1C" }, { bg: "#DBEAFE", border: "#60A5FA", tag: "#1D4ED8" }];
@@ -17,7 +18,7 @@ const SKILL_EMOJI: Record<string, string> = { Frontend: "Design", Backend: "Buil
 export default function VibrantTemplate({ bio, projects, skills, experiences, education, contact, certifications, customSections, sectionLayouts, sectionOrder, hiddenSections, notApplicableSections, editMode, onSectionEdit }: PortfolioData) {
   const name = [bio?.first_name, bio?.last_name].filter(Boolean).join(" ") || "Your Name";
   const firstName = bio?.first_name || name;
-  const hasContactLinks = Boolean(contact && (contact.email || contact.phone || contact.github_url || contact.linkedin_url || contact.twitter_url || contact.website_url));
+  const hasContactLinks = hasContactContent(contact);
 
   const bioLayout = getEffectiveLayout("bio", sectionLayouts);
   const projectsLayout = getEffectiveLayout("projects", sectionLayouts);
@@ -32,16 +33,21 @@ export default function VibrantTemplate({ bio, projects, skills, experiences, ed
     return acc;
   }, {});
 
-  const renderableSections = getRenderableSectionIds(sectionOrder, hiddenSections, {
-    bio: Boolean(bio?.first_name || bio?.last_name || bio?.headline || bio?.bio || bio?.avatar_url || bio?.location),
-    projects: projects.length > 0,
-    skills: skills.length > 0,
-    experience: experiences.length > 0,
-    education: education.length > 0,
-    certifications: certifications.length > 0,
-    contact: hasContactLinks,
-    ...getCustomSectionAvailability(customSections),
-  }, notApplicableSections);
+  const renderableSections = getRenderableSectionIds(
+    sectionOrder,
+    hiddenSections,
+    getPortfolioSectionAvailability({
+      bio,
+      projects,
+      skills,
+      experiences,
+      education,
+      contact,
+      certifications,
+      customSections,
+    }),
+    notApplicableSections
+  );
 
   const customSectionMap = buildCustomSectionMap(customSections, (section) =>
     renderSimpleCustomSection(

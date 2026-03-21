@@ -32,11 +32,21 @@ import { VALIDATION_RULES, EMPLOYMENT_TYPES, PORTFOLIO_TYPES, VISIBILITY_OPTIONS
 import { supabase } from "@/integrations/supabase/client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { normalizeImportedDate, type ParsedContact } from "@/lib/imports";
+import { getPortfolioPublicUrl, getPortfolioShareUrl } from "@/lib/portfolioSharing";
 import { Switch } from "@/components/ui/switch";
 import { createCustomSectionId } from "@/lib/portfolioSections";
 
 type Section = "bio" | "projects" | "skills" | "experience" | "education" | "certifications" | "custom" | "contact" | "settings";
 type CustomSectionDraft = { title: string; body: string };
+type UsernameStatus = "idle" | "checking" | "available" | "taken" | "invalid";
+type GithubRepo = {
+  name: string;
+  problem_statement?: string | null;
+  solution_approach?: string | null;
+  technologies?: string[] | null;
+  github_url?: string | null;
+  demo_url?: string | null;
+};
 
 const sections: { id: Section; label: string; icon: React.ElementType; description: string }[] = [
   { id: "bio", label: "Bio", icon: User, description: "Name, headline & about" },
@@ -49,6 +59,9 @@ const sections: { id: Section; label: string; icon: React.ElementType; descripti
   { id: "contact", label: "Contact", icon: Mail, description: "How to reach you" },
   { id: "settings", label: "Settings", icon: Settings2, description: "Username & visibility" },
 ];
+
+const normalizeUsername = (value: string) => value.trim().toLowerCase();
+const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : "Please try again.";
 
 const Builder = () => {
   const { user } = useAuth();
@@ -77,18 +90,21 @@ const Builder = () => {
 
   // Settings state
   const [usernameValue, setUsernameValue] = useState("");
-  const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
+  const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>("idle");
   const [portfolioNameValue, setPortfolioNameValue] = useState("");
   const [portfolioTypeValue, setPortfolioTypeValue] = useState("general");
   const [visibilityValue, setVisibilityValue] = useState("private");
   const usernameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const usernameValidationRequestRef = useRef(0);
+  const latestUsernameValueRef = useRef("");
+  const isMountedRef = useRef(true);
 
   const [bioForm, setBioForm] = useState({ first_name: "", last_name: "", headline: "", bio: "", location: "" });
   const [contactForm, setContactForm] = useState({ email: "", phone: "", linkedin_url: "", github_url: "", twitter_url: "", website_url: "" });
   const [newSkill, setNewSkill] = useState("");
   const [projectForm, setProjectForm] = useState({ name: "", problem_statement: "", solution_approach: "", technologies: "", github_url: "", project_url: "" });
   const [githubUsername, setGithubUsername] = useState("");
-  const [githubRepos, setGithubRepos] = useState<any[]>([]);
+  const [githubRepos, setGithubRepos] = useState<GithubRepo[]>([]);
   const [selectedRepos, setSelectedRepos] = useState<Set<number>>(new Set());
   const [isFetchingGithub, setIsFetchingGithub] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -101,9 +117,21 @@ const Builder = () => {
   const customSectionSaveTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const pendingCustomSectionDraftsRef = useRef<Record<string, CustomSectionDraft>>({});
   const savingCustomSectionIdsRef = useRef<string[]>([]);
+  const flushPendingCustomSectionDraftsRef = useRef<(options?: { silent?: boolean }) => void>(() => {});
   const hiddenSections = new Set(((portfolio?.hidden_sections as string[] | null) || []));
   const notApplicableSections = new Set(((portfolio?.not_applicable_sections as string[] | null) || []));
   const isSectionNotApplicable = (sectionId: string) => notApplicableSections.has(sectionId);
+  const normalizedUsernameValue = normalizeUsername(usernameValue);
+  const publicPortfolioUrl = getPortfolioPublicUrl({
+    origin: window.location.origin,
+    username: normalizedUsernameValue,
+    portfolio,
+  });
+  const unlistedShareUrl = getPortfolioShareUrl({
+    origin: window.location.origin,
+    username: normalizedUsernameValue,
+    portfolio: portfolio ? { ...portfolio, visibility: "unlisted" } : portfolio,
+  });
 
   const toggleNotApplicable = async (sectionId: string, enabled: boolean) => {
     const current = ((portfolio?.not_applicable_sections as string[] | null) || []).filter(Boolean);
@@ -161,17 +189,10 @@ const Builder = () => {
   }, [customSections]);
 
   useEffect(() => {
-    return () => {
-      Object.values(customSectionSaveTimeoutsRef.current).forEach((timeout) => clearTimeout(timeout));
-      customSectionSaveTimeoutsRef.current = {};
-    };
-  }, []);
-
-  useEffect(() => {
     if (!portfolioLoading && !portfolio && user && !requestedPortfolioId) {
       createPortfolio.mutate({});
     }
-  }, [portfolioLoading, portfolio, user, requestedPortfolioId]);
+  }, [createPortfolio, portfolioLoading, portfolio, user, requestedPortfolioId]);
 
   // Initialize settings form from profile
   const { data: profileData } = useQuery({
@@ -184,7 +205,11 @@ const Builder = () => {
     enabled: !!user,
   });
   useEffect(() => {
-    if (profileData) setUsernameValue(profileData.username || "");
+    if (profileData) {
+      const nextUsername = profileData.username || "";
+      setUsernameValue(nextUsername);
+      latestUsernameValueRef.current = normalizeUsername(nextUsername);
+    }
   }, [profileData]);
 
   useEffect(() => {
@@ -193,36 +218,117 @@ const Builder = () => {
       setPortfolioTypeValue(portfolio.portfolio_type || "general");
       setVisibilityValue((portfolio.visibility as string) || (portfolio.is_public ? "public" : "private"));
     }
-  }, [portfolio?.id, portfolio?.name, portfolio?.portfolio_type, portfolio?.visibility, portfolio?.is_public]);
+  }, [portfolio, portfolio?.id, portfolio?.name, portfolio?.portfolio_type, portfolio?.visibility, portfolio?.is_public]);
 
-  const checkUsername = useCallback(async (value: string) => {
-    if (!value) { setUsernameStatus("idle"); return; }
-    if (!VALIDATION_RULES.USERNAME.PATTERN.test(value)) { setUsernameStatus("invalid"); return; }
-    if (value.length < VALIDATION_RULES.USERNAME.MIN_LENGTH || value.length > VALIDATION_RULES.USERNAME.MAX_LENGTH) {
-      setUsernameStatus("invalid"); return;
+  const validateUsernameValue = useCallback(async (value: string): Promise<UsernameStatus> => {
+    const normalizedValue = normalizeUsername(value);
+    latestUsernameValueRef.current = normalizedValue;
+
+    if (!normalizedValue) {
+      setUsernameStatus("idle");
+      return "idle";
     }
+
+    if (!VALIDATION_RULES.USERNAME.PATTERN.test(normalizedValue)) {
+      setUsernameStatus("invalid");
+      return "invalid";
+    }
+
+    if (
+      normalizedValue.length < VALIDATION_RULES.USERNAME.MIN_LENGTH ||
+      normalizedValue.length > VALIDATION_RULES.USERNAME.MAX_LENGTH
+    ) {
+      setUsernameStatus("invalid");
+      return "invalid";
+    }
+
+    if (normalizedValue === normalizeUsername(profileData?.username || "")) {
+      setUsernameStatus("available");
+      return "available";
+    }
+
+    const requestId = ++usernameValidationRequestRef.current;
     setUsernameStatus("checking");
-    const { data } = await supabase
+
+    const { data, error } = await supabase
       .from("profiles")
       .select("id")
-      .eq("username", value)
+      .eq("username", normalizedValue)
       .neq("id", user!.id)
       .maybeSingle();
-    setUsernameStatus(data ? "taken" : "available");
-  }, [user]);
+
+    if (error) {
+      if (requestId === usernameValidationRequestRef.current && isMountedRef.current) {
+        setUsernameStatus("idle");
+      }
+      throw error;
+    }
+
+    const nextStatus: UsernameStatus = data ? "taken" : "available";
+    if (
+      requestId === usernameValidationRequestRef.current &&
+      latestUsernameValueRef.current === normalizedValue &&
+      isMountedRef.current
+    ) {
+      setUsernameStatus(nextStatus);
+    }
+
+    return nextStatus;
+  }, [profileData?.username, user]);
 
   const handleUsernameChange = (value: string) => {
-    setUsernameValue(value);
+    const normalizedValue = value.toLowerCase();
+    setUsernameValue(normalizedValue);
+    latestUsernameValueRef.current = normalizeUsername(normalizedValue);
+    usernameValidationRequestRef.current += 1;
+
+    if (usernameDebounceRef.current) {
+      clearTimeout(usernameDebounceRef.current);
+      usernameDebounceRef.current = null;
+    }
+
+    if (!latestUsernameValueRef.current) {
+      setUsernameStatus("idle");
+      return;
+    }
+
+    if (
+      !VALIDATION_RULES.USERNAME.PATTERN.test(latestUsernameValueRef.current) ||
+      latestUsernameValueRef.current.length < VALIDATION_RULES.USERNAME.MIN_LENGTH ||
+      latestUsernameValueRef.current.length > VALIDATION_RULES.USERNAME.MAX_LENGTH
+    ) {
+      setUsernameStatus("invalid");
+      return;
+    }
+
     setUsernameStatus("idle");
-    if (usernameDebounceRef.current) clearTimeout(usernameDebounceRef.current);
-    usernameDebounceRef.current = setTimeout(() => checkUsername(value), 400);
+    usernameDebounceRef.current = setTimeout(() => {
+      usernameDebounceRef.current = null;
+      void validateUsernameValue(normalizedValue);
+    }, 400);
   };
 
   const handleSaveSettings = async () => {
-    if (usernameStatus === "taken" || usernameStatus === "invalid") {
-      toast({ title: "Fix username errors first", variant: "destructive" }); return;
+    try {
+      if (usernameDebounceRef.current) {
+        clearTimeout(usernameDebounceRef.current);
+        usernameDebounceRef.current = null;
+      }
+
+      const resolvedUsernameStatus = normalizedUsernameValue
+        ? await validateUsernameValue(normalizedUsernameValue)
+        : "idle";
+
+      if (resolvedUsernameStatus === "taken" || resolvedUsernameStatus === "invalid") {
+        toast({ title: "Fix username errors first", variant: "destructive" });
+        return;
+      }
+    } catch (error: unknown) {
+      toast({ title: "Could not validate username", description: getErrorMessage(error), variant: "destructive" });
+      return;
     }
-    if (visibilityValue === "public" && !usernameValue.trim()) {
+
+    if (visibilityValue === "public" && !normalizedUsernameValue) {
       toast({
         title: "Set a username before making this portfolio public",
         description: "Public portfolios need a username so the public URL can resolve.",
@@ -233,7 +339,7 @@ const Builder = () => {
     try {
       const { error: profileError } = await supabase
         .from("profiles")
-        .update({ username: usernameValue || null })
+        .update({ username: normalizedUsernameValue || null })
         .eq("id", user!.id);
       if (profileError) throw profileError;
 
@@ -246,26 +352,50 @@ const Builder = () => {
       await queryClient.invalidateQueries({ queryKey: ["portfolio"] });
       await queryClient.invalidateQueries({ queryKey: ["portfolios-all"] });
       toast({ title: "Settings saved!" });
-    } catch (e: any) {
-      toast({ title: "Error saving settings", description: e.message, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Error saving settings", description: getErrorMessage(error), variant: "destructive" });
     }
   };
 
-  const handleSaveBio = () => {
-    saveBio.mutate(bioForm, {
-      onSuccess: () => toast({ title: "Bio saved!" }),
-      onError: (e) => toast({ title: "Error saving bio", description: e.message, variant: "destructive" }),
-    });
+  const hasBioContent = (input: typeof bioForm & { avatar_url?: string | null }) => (
+    [input.first_name, input.last_name, input.headline, input.bio, input.location, input.avatar_url ?? ""]
+      .some((value) => value.trim().length > 0)
+  );
+
+  const hasContactContent = (input: typeof contactForm) => (
+    Object.values(input).some((value) => value.trim().length > 0)
+  );
+
+  const handleSaveBio = async (
+    input: typeof bioForm & { avatar_url?: string | null } = bioForm,
+    successTitle: string = "Bio saved!"
+  ) => {
+    try {
+      if (hasBioContent(input)) {
+        await ensureSectionApplicable("bio");
+      }
+
+      await saveBio.mutateAsync(input);
+      toast({ title: successTitle });
+    } catch (error: unknown) {
+      toast({ title: "Error saving bio", description: getErrorMessage(error), variant: "destructive" });
+    }
   };
 
-  const handleSaveContact = () => {
-    saveContact.mutate(contactForm, {
-      onSuccess: () => toast({ title: "Contact saved!" }),
-      onError: (e) => toast({ title: "Error saving contact", description: e.message, variant: "destructive" }),
-    });
+  const handleSaveContact = async () => {
+    try {
+      if (hasContactContent(contactForm)) {
+        await ensureSectionApplicable("contact");
+      }
+
+      await saveContact.mutateAsync(contactForm);
+      toast({ title: "Contact saved!" });
+    } catch (error: unknown) {
+      toast({ title: "Error saving contact", description: getErrorMessage(error), variant: "destructive" });
+    }
   };
 
-  const handleAddSkill = () => {
+  const handleAddSkill = async () => {
     const parsedSkills = newSkill
       .split(",")
       .map((skill) => skill.trim())
@@ -281,37 +411,40 @@ const Builder = () => {
     const availableSlots = VALIDATION_RULES.SKILLS.MAX_COUNT - skills.length;
     const nextSkills = parsedSkills.slice(0, availableSlots);
 
-    Promise.all(
-      nextSkills.map((skillName) =>
-        addSkill.mutateAsync({ skill_name: skillName, skill_category: "Custom", skill_type: "learned" })
-      )
-    )
-      .then(() => {
-        setNewSkill("");
-        toast({
-          title: nextSkills.length === 1 ? "Skill added!" : `${nextSkills.length} skills added!`,
-        });
-      })
-      .catch((error: any) => {
-        toast({ title: "Error adding skills", description: error.message, variant: "destructive" });
+    try {
+      await ensureSectionApplicable("skills");
+      await Promise.all(
+        nextSkills.map((skillName) =>
+          addSkill.mutateAsync({ skill_name: skillName, skill_category: "Custom", skill_type: "learned" })
+        )
+      );
+      setNewSkill("");
+      toast({
+        title: nextSkills.length === 1 ? "Skill added!" : `${nextSkills.length} skills added!`,
       });
+    } catch (error: unknown) {
+      toast({ title: "Error adding skills", description: getErrorMessage(error), variant: "destructive" });
+    }
   };
 
-  const handleAddProject = () => {
+  const handleAddProject = async () => {
     if (projects.length >= VALIDATION_RULES.PROJECTS.MAX_COUNT) {
       toast({ title: `Max ${VALIDATION_RULES.PROJECTS.MAX_COUNT} projects`, variant: "destructive" });
       return;
     }
     if (!projectForm.name.trim()) return;
-    addProject.mutate({
-      ...projectForm,
-      technologies: projectForm.technologies.split(",").map((t) => t.trim()).filter(Boolean),
-    }, {
-      onSuccess: () => {
-        setProjectForm({ name: "", problem_statement: "", solution_approach: "", technologies: "", github_url: "", project_url: "" });
-        toast({ title: "Project added!" });
-      },
-    });
+
+    try {
+      await ensureSectionApplicable("projects");
+      await addProject.mutateAsync({
+        ...projectForm,
+        technologies: projectForm.technologies.split(",").map((t) => t.trim()).filter(Boolean),
+      });
+      setProjectForm({ name: "", problem_statement: "", solution_approach: "", technologies: "", github_url: "", project_url: "" });
+      toast({ title: "Project added!" });
+    } catch (error: unknown) {
+      toast({ title: "Could not add project", description: getErrorMessage(error), variant: "destructive" });
+    }
   };
 
   const handleFetchGithub = async () => {
@@ -332,8 +465,8 @@ const Builder = () => {
       if ((data.projects || []).length === 0) {
         toast({ title: "No public repositories found for this username" });
       }
-    } catch (err: any) {
-      toast({ title: "Error fetching repos", description: err.message, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Error fetching repos", description: getErrorMessage(error), variant: "destructive" });
     } finally {
       setIsFetchingGithub(false);
     }
@@ -362,6 +495,7 @@ const Builder = () => {
     if (toImport.length === 0) return;
     setIsImporting(true);
     try {
+      await ensureSectionApplicable("projects");
       for (const idx of toImport) {
         const repo = githubRepos[idx];
         await addProject.mutateAsync({
@@ -377,8 +511,8 @@ const Builder = () => {
       setGithubRepos([]);
       setSelectedRepos(new Set());
       setGithubUsername("");
-    } catch (err: any) {
-      toast({ title: "Import error", description: err.message, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Import error", description: getErrorMessage(error), variant: "destructive" });
     } finally {
       setIsImporting(false);
     }
@@ -404,14 +538,17 @@ const Builder = () => {
     }
   };
 
-  const handleAddEducation = () => {
+  const handleAddEducation = async () => {
     if (!eduForm.institution.trim()) return;
-    addEducation.mutate(eduForm, {
-      onSuccess: () => {
-        setEduForm({ institution: "", degree: "", field_of_study: "", graduation_year: "", cgpa: "", description: "" });
-        toast({ title: "Education added!" });
-      },
-    });
+
+    try {
+      await ensureSectionApplicable("education");
+      await addEducation.mutateAsync(eduForm);
+      setEduForm({ institution: "", degree: "", field_of_study: "", graduation_year: "", cgpa: "", description: "" });
+      toast({ title: "Education added!" });
+    } catch (error: unknown) {
+      toast({ title: "Could not add education", description: getErrorMessage(error), variant: "destructive" });
+    }
   };
 
   const handleAddCertification = async () => {
@@ -447,17 +584,18 @@ const Builder = () => {
   };
 
   const setCustomSectionSaving = (sectionId: string, isSaving: boolean) => {
-    setSavingCustomSectionIds((current) => {
-      const next = isSaving
-        ? (current.includes(sectionId) ? current : [...current, sectionId])
-        : current.filter((entry) => entry !== sectionId);
+    const next = isSaving
+      ? (savingCustomSectionIdsRef.current.includes(sectionId) ? savingCustomSectionIdsRef.current : [...savingCustomSectionIdsRef.current, sectionId])
+      : savingCustomSectionIdsRef.current.filter((entry) => entry !== sectionId);
 
-      savingCustomSectionIdsRef.current = next;
-      return next;
-    });
+    savingCustomSectionIdsRef.current = next;
+
+    if (isMountedRef.current) {
+      setSavingCustomSectionIds(next);
+    }
   };
 
-  const persistCustomSectionDraft = (sectionId: string) => {
+  const persistCustomSectionDraft = (sectionId: string, options?: { silent?: boolean }) => {
     const draft = pendingCustomSectionDraftsRef.current[sectionId];
     if (!draft || savingCustomSectionIdsRef.current.includes(sectionId)) return;
 
@@ -468,16 +606,18 @@ const Builder = () => {
       { id: sectionId, ...draft },
       {
         onError: (error) => {
-          toast({
-            title: "Could not save custom section",
-            description: error instanceof Error ? error.message : "Please try again.",
-            variant: "destructive",
-          });
+          if (!options?.silent && isMountedRef.current) {
+            toast({
+              title: "Could not save custom section",
+              description: error instanceof Error ? error.message : "Please try again.",
+              variant: "destructive",
+            });
+          }
         },
         onSettled: () => {
           setCustomSectionSaving(sectionId, false);
           if (pendingCustomSectionDraftsRef.current[sectionId]) {
-            persistCustomSectionDraft(sectionId);
+            persistCustomSectionDraft(sectionId, options);
           }
         },
       }
@@ -496,6 +636,38 @@ const Builder = () => {
       persistCustomSectionDraft(sectionId);
     }, 500);
   };
+
+  const flushPendingCustomSectionDrafts = (options?: { silent?: boolean }) => {
+    Object.values(customSectionSaveTimeoutsRef.current).forEach((timeout) => clearTimeout(timeout));
+    customSectionSaveTimeoutsRef.current = {};
+
+    Object.keys(pendingCustomSectionDraftsRef.current).forEach((sectionId) => {
+      persistCustomSectionDraft(sectionId, options);
+    });
+  };
+  flushPendingCustomSectionDraftsRef.current = flushPendingCustomSectionDrafts;
+
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    const handlePageHide = () => {
+      flushPendingCustomSectionDraftsRef.current({ silent: true });
+    };
+
+    window.addEventListener("pagehide", handlePageHide);
+
+    return () => {
+      isMountedRef.current = false;
+      window.removeEventListener("pagehide", handlePageHide);
+
+      if (usernameDebounceRef.current) {
+        clearTimeout(usernameDebounceRef.current);
+        usernameDebounceRef.current = null;
+      }
+
+      flushPendingCustomSectionDraftsRef.current({ silent: true });
+    };
+  }, []);
 
   const updateCustomSectionDraft = (sectionId: string, draft: CustomSectionDraft) => {
     setCustomSectionDrafts((current) => ({
@@ -758,9 +930,7 @@ const Builder = () => {
                   <AvatarUpload
                     currentUrl={bio?.avatar_url}
                     onUpload={(url) => {
-                      saveBio.mutate({ ...bioForm, avatar_url: url }, {
-                        onSuccess: () => toast({ title: "Avatar saved!" }),
-                      });
+                      void handleSaveBio({ ...bioForm, avatar_url: url }, "Avatar saved!");
                     }}
                   />
                   <div className="grid grid-cols-2 gap-4">
@@ -793,7 +963,7 @@ const Builder = () => {
                     <Label>Location</Label>
                     <Input value={bioForm.location} onChange={(e) => setBioForm({ ...bioForm, location: e.target.value })} placeholder="e.g. Bengaluru, Karnataka" maxLength={100} />
                   </div>
-                  <Button onClick={handleSaveBio} disabled={saveBio.isPending} variant="hero">
+                  <Button onClick={() => void handleSaveBio()} disabled={saveBio.isPending} variant="hero">
                     <Save className="mr-2 h-4 w-4" /> {saveBio.isPending ? "Saving..." : "Save Bio"}
                   </Button>
                 </div>
@@ -1147,7 +1317,7 @@ const Builder = () => {
                     </div>
                   )}
 
-                  {certifications.map((cert: any) => (
+                  {certifications.map((cert) => (
                     <div key={cert.id} className="rounded-xl border border-border bg-card p-4">
                       <div className="flex items-start justify-between">
                         <div>
@@ -1294,7 +1464,7 @@ const Builder = () => {
                       <Input value={contactForm.website_url} onChange={(e) => setContactForm({ ...contactForm, website_url: e.target.value })} placeholder="https://..." />
                     </div>
                   </div>
-                  <Button onClick={handleSaveContact} disabled={saveContact.isPending} variant="hero">
+                  <Button onClick={() => void handleSaveContact()} disabled={saveContact.isPending} variant="hero">
                     <Save className="mr-2 h-4 w-4" /> {saveContact.isPending ? "Saving..." : "Save Contact"}
                   </Button>
                 </div>
@@ -1352,8 +1522,12 @@ const Builder = () => {
                             {visibilityValue === "unlisted" && "Only people with your secret share link can open this portfolio."}
                             {visibilityValue === "private" && "Only you can access this portfolio right now."}
                           </p>
-                          {visibilityValue === "public" && usernameValue && portfolio?.share_token && <p className="text-xs text-muted-foreground">Public URL: /p/{usernameValue}/{portfolio.share_token}</p>}
-                          {visibilityValue === "unlisted" && portfolio?.share_token && <p className="text-xs text-muted-foreground">Share URL: /share/{portfolio.share_token}</p>}
+                          {visibilityValue === "public" && publicPortfolioUrl && (
+                            <p className="text-xs text-muted-foreground">Public URL: {publicPortfolioUrl}</p>
+                          )}
+                          {visibilityValue === "unlisted" && unlistedShareUrl && (
+                            <p className="text-xs text-muted-foreground">Share URL: {unlistedShareUrl}</p>
+                          )}
                         </div>
                       </div>
                     </div>

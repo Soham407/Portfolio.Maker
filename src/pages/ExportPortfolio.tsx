@@ -1,43 +1,34 @@
 import { useEffect } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
-import { usePortfolio } from "@/hooks/usePortfolio";
-import { useBio } from "@/hooks/useBio";
-import { useProjects } from "@/hooks/useProjects";
-import { useSkills } from "@/hooks/useSkills";
-import { useExperience } from "@/hooks/useExperience";
-import { useEducation } from "@/hooks/useEducation";
-import { useContact } from "@/hooks/useContact";
-import { useCertifications } from "@/hooks/useCertifications";
-import { useCustomSections } from "@/hooks/useCustomSections";
 import PrintablePortfolio from "@/components/export/PrintablePortfolio";
-import { createCustomSectionId } from "@/lib/portfolioSections";
+import { usePortfolioPreviewData } from "@/hooks/usePortfolioPreviewData";
 
 const ExportPortfolio = () => {
   const { mode } = useParams<{ mode: string }>();
   const [searchParams] = useSearchParams();
   const portfolioParam = searchParams.get("portfolio") ?? undefined;
   const exportMode = mode === "resume" ? "resume" : "portfolio";
-  const { portfolio } = usePortfolio(portfolioParam);
-  const portfolioId = portfolio?.id;
-
-  const { bio } = useBio(portfolioId);
-  const { projects } = useProjects(portfolioId);
-  const { skills } = useSkills(portfolioId);
-  const { experiences } = useExperience(portfolioId);
-  const { education } = useEducation(portfolioId);
-  const { contact } = useContact(portfolioId);
-  const { certifications } = useCertifications(portfolioId);
-  const { customSections } = useCustomSections(portfolioId);
+  const { portfolio, templateData, isLoading, isReady } = usePortfolioPreviewData(portfolioParam);
 
   useEffect(() => {
-    if (!portfolioId) return;
-    const timeout = window.setTimeout(() => {
-      window.print();
-    }, 400);
-    return () => window.clearTimeout(timeout);
-  }, [portfolioId, exportMode]);
+    if (!isReady) return;
 
-  if (!portfolioId) {
+    let timeout: number | null = null;
+    const frame = window.requestAnimationFrame(() => {
+      timeout = window.setTimeout(() => {
+        window.print();
+      }, 250);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (timeout) {
+        window.clearTimeout(timeout);
+      }
+    };
+  }, [exportMode, isReady]);
+
+  if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -45,26 +36,24 @@ const ExportPortfolio = () => {
     );
   }
 
-  const sectionOrder = [
-    ...(portfolio?.section_order ?? []),
-    ...customSections.map((section) => createCustomSectionId(section.id)),
-  ];
+  if (!portfolio) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-6">
+        <div className="max-w-md text-center">
+          <h1 className="text-2xl font-semibold text-foreground">Export not available</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            This portfolio could not be loaded for printing.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <PrintablePortfolio
       mode={exportMode}
       name={portfolio?.name}
-      bio={bio ?? null}
-      projects={projects}
-      skills={skills}
-      experiences={experiences}
-      education={education}
-      contact={contact ?? null}
-      certifications={certifications}
-      customSections={customSections}
-      sectionOrder={sectionOrder}
-      hiddenSections={portfolio?.hidden_sections ?? undefined}
-      notApplicableSections={portfolio?.not_applicable_sections ?? undefined}
+      {...templateData}
     />
   );
 };
